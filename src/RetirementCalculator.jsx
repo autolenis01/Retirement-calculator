@@ -259,14 +259,11 @@ const GrowthChart = memo(function GrowthChart({ data, reqCapital, retAge }) {
           );
         })}
         {/* X labels */}
-        {data.filter((_, i) => i % xTickInterval === 0 || i === data.length - 1).map((d, idx) => {
-          const i = data.indexOf(d);
-          return (
-            <text key={idx} x={toX(i)} y={H - 6} textAnchor="middle" fill="#94a3b8" fontSize="9" fontFamily="DM Sans, sans-serif">
+        {data.map((d, i) => ({ d, i })).filter(({ i }) => i % xTickInterval === 0 || i === data.length - 1).map(({ d, i }) => (
+            <text key={i} x={toX(i)} y={H - 6} textAnchor="middle" fill="#94a3b8" fontSize="9" fontFamily="DM Sans, sans-serif">
               Age {d.age}
             </text>
-          );
-        })}
+        ))}
         {/* Required capital line */}
         {reqCapital > 0 && reqCapY >= padT && reqCapY <= padT + cH && (
           <g>
@@ -446,7 +443,7 @@ export default function RetirementCalculator() {
         age: curAge + yr,
         year: yr,
         value: val,
-        contributed: pv + pmt * yr * 12,
+        contributed: pv + (pmt * yr * 12),
       });
     }
 
@@ -868,12 +865,12 @@ export default function RetirementCalculator() {
 
             {/* Metric Grid */}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 16 }}>
-              <MetricTile label="Projected Retirement Value" value={fmt(c.projValue)} icon="🏦" sub={`After ${c.years} yrs at ${pct(c.r)}`} />
+              <MetricTile label="Projected Retirement Value" value={fmt(c.projValue)} icon="🏦" sub={`After ${c.years} yrs at ${pct(c.r)}`} accent large />
               <MetricTile label="Required Capital" value={fmt(c.reqCapital)} icon="🎯" sub={`Net goal ÷ ${pct(c.wdRate)} rate`} />
               <MetricTile label="Capital Surplus / Shortfall" value={`${c.capDiff >= 0 ? "+" : "-"}${fmt(Math.abs(c.capDiff))}`} icon={c.capDiff >= 0 ? "✅" : "⚠️"} sub="Projected vs. required" />
               <MetricTile label="Net Monthly Goal (Investments)" value={fmt(c.netMoGoal)} icon="💼" sub="After Social Security" />
               <MetricTile label="Required Monthly Contribution" value={fmt(c.neededPMT)} icon="📅" sub="To hit net capital goal" />
-              <MetricTile label="Pacific Life Withdrawal Rate" value={pct(c.wdRate)} icon="🔒" sub={`Age ${c.retAge} · ${incomeType === "singleLife" ? "Single" : "Joint"} Life`} />
+              <MetricTile label="Pacific Life Withdrawal Rate" value={pct(c.wdRate)} icon="🔒" sub={`Age ${c.retAge} · ${incomeType === "singleLife" ? "Single" : "Joint"} Life`} accent />
             </div>
 
             {/* Readiness & Growth Row */}
