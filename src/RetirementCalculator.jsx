@@ -1,4 +1,5 @@
 import React, { useMemo, useState, useCallback, memo } from "react";
+import CopilotPanel from "./copilot/CopilotPanel.jsx";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -203,6 +204,7 @@ export default function RetirementCalculator() {
   const [socialSecurityIncome, setSocialSecurityIncome] = useState("0");
   const [fundKey, setFundKey] = useState("BLEND");
   const [activeTab, setActiveTab] = useState("inputs");
+  const [copilotOpen, setCopilotOpen] = useState(false);
 
   const calc = useMemo(() => {
     const curAge = clampAge(parseNum(currentAge));
@@ -241,8 +243,19 @@ export default function RetirementCalculator() {
     };
   }, [currentAge, incomeStartAge, initialInvestment, monthlyContribution, desiredMonthlyIncome, socialSecurityIncome, fundKey, incomeType]);
 
-
-
+  // State object for the copilot agent
+  const copilotCalcState = useMemo(() => ({
+    curAge: calc.curAge,
+    retAge: calc.retAge,
+    pv: calc.pv,
+    pmt: calc.pmt,
+    desiredMo: calc.desiredMo,
+    ss: calc.ss,
+    r: calc.r,
+    wdRate: calc.wdRate,
+    incomeType,
+    fund: calc.fund,
+  }), [calc, incomeType]);
 
   const buildReport = useCallback(() => {
     const c = calc;
@@ -762,6 +775,13 @@ export default function RetirementCalculator() {
         )}
 
       </div>
+
+      {/* AI Copilot Panel */}
+      <CopilotPanel
+        calcState={copilotCalcState}
+        isOpen={copilotOpen}
+        onToggle={() => setCopilotOpen(prev => !prev)}
+      />
     </div>
   );
 }
