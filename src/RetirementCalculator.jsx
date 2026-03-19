@@ -108,7 +108,7 @@ const InputField = memo(function InputField({ label, id, value, onChange, hint, 
   );
 });
 
-const SelectField = memo(({ label, value, onChange, options }) {
+const SelectField = memo(({ label, value, onChange, options }) => {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
       <label style={{ fontSize: 12, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", color: "#64748b" }}>{label}</label>
@@ -173,7 +173,7 @@ const MetricTile = memo(function MetricTile({ label, value, sub, accent, large, 
   );
 });
 
-const SummaryRow = memo(({ label, value, highlight }) {
+const SummaryRow = memo(({ label, value, highlight }) => {
   return (
     <div style={{
       display: "flex",

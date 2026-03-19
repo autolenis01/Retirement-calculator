@@ -4,6 +4,9 @@
   "version": "1.0.0",
   "description": "Retirement Income Projection Calculator — ANWPX, AGTHX, Pacific Life Lifetime Income Creator, Social Security integration",
   "type": "module",
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "scripts": {
     "dev": "vite",
     "build": "vite build",
