@@ -4,9 +4,9 @@ import CopilotPanel from "./copilot/CopilotPanel.jsx";
 // ─── Constants ───────────────────────────────────────────────────────────────
 
 const FUND_OPTIONS = {
-  ANWPX: { label: "New Perspective Fund A (ANWPX)", ticker: "ANWPX", annualReturn: 0.122 },
-  AGTHX: { label: "The Growth Fund of America A (AGTHX)", ticker: "AGTHX", annualReturn: 0.1373 },
-  BLEND: { label: "50/50 Blend — ANWPX & AGTHX", ticker: "BLEND", annualReturn: 0.12965 },
+  ANWPX: { label: "New Perspective Fund A (ANWPX)", ticker: "ANWPX", annualReturn: 0.122, volatility: 0.155, description: "Global equity fund with broad diversification" },
+  AGTHX: { label: "The Growth Fund of America A (AGTHX)", ticker: "AGTHX", annualReturn: 0.1373, volatility: 0.17, description: "Large-cap U.S. growth focused fund" },
+  BLEND: { label: "50/50 Blend — ANWPX & AGTHX", ticker: "BLEND", annualReturn: 0.12965, volatility: 0.145, description: "Balanced blend for reduced volatility" },
 };
 
 const PACIFIC_RATES = {
@@ -72,38 +72,117 @@ function requiredPMT(target, pv, r, months) {
   return mr === 0 ? remaining / months : (remaining * mr) / (gf - 1);
 }
 
+function buildGrowthTimeline(pv, pmt, r, curAge, retAge) {
+  const timeline = [];
+  let totalContributed = pv;
+  for (let age = curAge; age <= retAge; age++) {
+    const yearsElapsed = age - curAge;
+    const months = yearsElapsed * 12;
+    const value = fv(pv, pmt, r, months);
+    const contributed = pv + pmt * months;
+    totalContributed = contributed;
+    timeline.push({
+      age,
+      year: yearsElapsed,
+      value,
+      contributed,
+      growth: value - contributed,
+      totalReturnPct: contributed > 0 ? ((value - contributed) / contributed) : 0,
+    });
+  }
+  return timeline;
+}
+
+
+// ─── CSS-in-JS Styles ────────────────────────────────────────────────────────
+
+const GLOBAL_CSS = `
+  * { box-sizing: border-box; }
+  body { margin: 0; }
+  @media print {
+    body { background: white !important; }
+    .no-print { display: none !important; }
+    .print-card { box-shadow: none !important; border: 1px solid #e2e8f0 !important; }
+    @page { size: letter; margin: 0.5in; }
+  }
+  input:focus, select:focus { outline: none; }
+  .tab-btn { cursor: pointer; transition: all 0.25s ease; }
+  .tab-btn:hover { background: rgba(255,255,255,0.12) !important; transform: translateY(-1px); }
+  .card-hover { transition: all 0.25s ease; }
+  .card-hover:hover { transform: translateY(-2px); box-shadow: 0 8px 32px rgba(15,23,42,0.1) !important; }
+  .metric-hover { transition: all 0.25s ease; }
+  .metric-hover:hover { transform: translateY(-2px); box-shadow: 0 6px 24px rgba(15,23,42,0.08) !important; }
+  .btn-hover { transition: all 0.2s ease; }
+  .btn-hover:hover { transform: translateY(-1px); opacity: 0.92; }
+  @keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(16px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes scaleIn {
+    from { opacity: 0; transform: scale(0.95); }
+    to { opacity: 1; transform: scale(1); }
+  }
+  @keyframes slideDown {
+    from { opacity: 0; transform: translateY(-8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes pulseGlow {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(59,130,246,0.3); }
+    50% { box-shadow: 0 0 0 8px rgba(59,130,246,0); }
+  }
+  @keyframes progressFill {
+    from { width: 0; }
+  }
+  .animate-in { animation: fadeInUp 0.5s ease-out both; }
+  .animate-scale { animation: scaleIn 0.4s ease-out both; }
+  .rate-row { transition: all 0.15s ease; }
+  .rate-row:hover { background: #eff6ff !important; }
+  .growth-bar { animation: progressFill 1s ease-out both; }
+  @keyframes drawLine {
+    from { stroke-dashoffset: 2000; }
+    to { stroke-dashoffset: 0; }
+  }
+`;
+
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
-const InputField = memo(function InputField({ label, id, value, onChange, hint, inputMode = "text", ...props }) {
+const InputField = memo(function InputField({ label, id, value, onChange, hint, inputMode = "text", prefix, ...props }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-      <label htmlFor={id} style={{ fontSize: 12, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", color: "#64748b" }}>
+      <label htmlFor={id} style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "#64748b", fontFamily: "'DM Sans', sans-serif" }}>
         {label}
       </label>
-      <input
-        id={id}
-        value={value}
-        onChange={onChange}
-        inputMode={inputMode}
-        style={{
-          border: "1.5px solid #e2e8f0",
-          borderRadius: 12,
-          padding: "10px 14px",
-          fontSize: 15,
-          color: "#0f172a",
-          background: "#f8fafc",
-          outline: "none",
-          transition: "border-color 0.15s, box-shadow 0.15s",
-          fontFamily: "inherit",
-          width: "100%",
-          boxSizing: "border-box",
-        }}
-        onFocus={e => { e.target.style.borderColor = "#1e40af"; e.target.style.boxShadow = "0 0 0 3px rgba(30,64,175,0.12)"; }}
-        onBlur={e => { e.target.style.borderColor = "#e2e8f0"; e.target.style.boxShadow = "none"; }}
-        {...props}
-      />
-      {hint && <p style={{ fontSize: 11, color: "#94a3b8", marginTop: 2 }}>{hint}</p>}
+      <div style={{ position: "relative" }}>
+        {prefix && (
+          <span style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", fontSize: 14, color: "#94a3b8", pointerEvents: "none", fontFamily: "'DM Sans', sans-serif" }}>
+            {prefix}
+          </span>
+        )}
+        <input
+          id={id}
+          value={value}
+          onChange={onChange}
+          inputMode={inputMode}
+          style={{
+            border: "1.5px solid #e2e8f0",
+            borderRadius: 12,
+            padding: prefix ? "12px 14px 12px 28px" : "12px 14px",
+            fontSize: 15,
+            color: "#0f172a",
+            background: "#fff",
+            outline: "none",
+            transition: "border-color 0.2s, box-shadow 0.2s",
+            fontFamily: "'DM Sans', sans-serif",
+            width: "100%",
+            boxSizing: "border-box",
+          }}
+          onFocus={e => { e.target.style.borderColor = "#3b82f6"; e.target.style.boxShadow = "0 0 0 3px rgba(59,130,246,0.1)"; }}
+          onBlur={e => { e.target.style.borderColor = "#e2e8f0"; e.target.style.boxShadow = "none"; }}
+          {...props}
+        />
+      </div>
+      {hint && <p style={{ fontSize: 11, color: "#94a3b8", marginTop: 2, fontFamily: "'DM Sans', sans-serif" }}>{hint}</p>}
     </div>
   );
 });
@@ -111,17 +190,17 @@ const InputField = memo(function InputField({ label, id, value, onChange, hint, 
 const SelectField = memo(({ label, value, onChange, options }) => {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-      <label style={{ fontSize: 12, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", color: "#64748b" }}>{label}</label>
+      <label style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "#64748b", fontFamily: "'DM Sans', sans-serif" }}>{label}</label>
       <select
         value={value}
         onChange={e => onChange(e.target.value)}
         style={{
           border: "1.5px solid #e2e8f0",
           borderRadius: 12,
-          padding: "10px 14px",
+          padding: "12px 14px",
           fontSize: 15,
           color: "#0f172a",
-          background: "#f8fafc",
+          background: "#fff",
           outline: "none",
           appearance: "none",
           backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2364748b' d='M6 8L1 3h10z'/%3E%3C/svg%3E")`,
@@ -129,12 +208,12 @@ const SelectField = memo(({ label, value, onChange, options }) => {
           backgroundPosition: "right 14px center",
           paddingRight: 36,
           cursor: "pointer",
-          fontFamily: "inherit",
+          fontFamily: "'DM Sans', sans-serif",
           width: "100%",
           boxSizing: "border-box",
-          transition: "border-color 0.15s",
+          transition: "border-color 0.2s",
         }}
-        onFocus={e => { e.target.style.borderColor = "#1e40af"; }}
+        onFocus={e => { e.target.style.borderColor = "#3b82f6"; }}
         onBlur={e => { e.target.style.borderColor = "#e2e8f0"; }}
       >
         {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
@@ -143,32 +222,36 @@ const SelectField = memo(({ label, value, onChange, options }) => {
   );
 });
 
-function SectionLabel({ children }) {
+function SectionLabel({ children, icon }) {
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
-      <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.16em", textTransform: "uppercase", color: "#94a3b8" }}>{children}</span>
-      <div style={{ flex: 1, height: 1, background: "#f1f5f9" }} />
+    <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 18 }}>
+      {icon && <span style={{ fontSize: 16 }}>{icon}</span>}
+      <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.14em", textTransform: "uppercase", color: "#94a3b8", fontFamily: "'DM Sans', sans-serif" }}>{children}</span>
+      <div style={{ flex: 1, height: 1, background: "linear-gradient(90deg, #e2e8f0, transparent)" }} />
     </div>
   );
 }
 
 const MetricTile = memo(function MetricTile({ label, value, sub, accent, large, icon }) {
   return (
-    <div style={{
-      background: accent ? "linear-gradient(135deg, #1e3a8a 0%, #1e40af 100%)" : "#f8fafc",
+    <div className="metric-hover" style={{
+      background: accent ? "linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%)" : "#fff",
       border: accent ? "none" : "1.5px solid #e8eef6",
       borderRadius: 16,
-      padding: "18px 20px",
+      padding: "20px 22px",
       display: "flex",
       flexDirection: "column",
-      gap: 6,
+      gap: 8,
+      position: "relative",
+      overflow: "hidden",
     }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
-        {icon && <span style={{ fontSize: 14, opacity: accent ? 0.7 : 0.5 }}>{icon}</span>}
-        <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", color: accent ? "rgba(255,255,255,0.65)" : "#64748b" }}>{label}</span>
+      {accent && <div style={{ position: "absolute", top: -20, right: -20, width: 80, height: 80, borderRadius: "50%", background: "rgba(255,255,255,0.06)" }} />}
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        {icon && <span style={{ fontSize: 16, opacity: accent ? 0.8 : 0.6 }}>{icon}</span>}
+        <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", color: accent ? "rgba(255,255,255,0.7)" : "#64748b", fontFamily: "'DM Sans', sans-serif" }}>{label}</span>
       </div>
-      <span style={{ fontSize: large ? 26 : 20, fontWeight: 700, color: accent ? "#fff" : "#0f172a", letterSpacing: "-0.02em", lineHeight: 1.1 }}>{value}</span>
-      {sub && <span style={{ fontSize: 11, color: accent ? "rgba(255,255,255,0.55)" : "#94a3b8" }}>{sub}</span>}
+      <span style={{ fontSize: large ? 28 : 22, fontWeight: 700, color: accent ? "#fff" : "#0f172a", letterSpacing: "-0.02em", lineHeight: 1.1, fontFamily: "'DM Sans', sans-serif" }}>{value}</span>
+      {sub && <span style={{ fontSize: 11, color: accent ? "rgba(255,255,255,0.55)" : "#94a3b8", fontFamily: "'DM Sans', sans-serif" }}>{sub}</span>}
     </div>
   );
 });
@@ -179,217 +262,218 @@ const SummaryRow = memo(({ label, value, highlight }) => {
       display: "flex",
       justifyContent: "space-between",
       alignItems: "center",
-      padding: "9px 14px",
+      padding: "10px 16px",
       borderRadius: 10,
-      background: highlight ? "#eff6ff" : "#f8fafc",
+      background: highlight ? "#eff6ff" : "transparent",
       border: highlight ? "1px solid #bfdbfe" : "1px solid transparent",
+      borderBottom: highlight ? undefined : "1px solid #f1f5f9",
     }}>
-      <span style={{ fontSize: 13, color: "#64748b" }}>{label}</span>
-      <span style={{ fontSize: 13, fontWeight: 600, color: highlight ? "#1e40af" : "#0f172a" }}>{value}</span>
+      <span style={{ fontSize: 13, color: "#64748b", fontFamily: "'DM Sans', sans-serif" }}>{label}</span>
+      <span style={{ fontSize: 13, fontWeight: 600, color: highlight ? "#1e40af" : "#0f172a", fontFamily: "'DM Sans', sans-serif" }}>{value}</span>
     </div>
   );
 });
 
-// ─── Visualization Components ─────────────────────────────────────────────────
+// ─── Readiness Score Gauge ───────────────────────────────────────────────────
 
-const ReadinessGauge = memo(function ReadinessGauge({ score, grade, meetsGoal }) {
-  const radius = 54;
-  const stroke = 10;
+const ReadinessGauge = memo(function ReadinessGauge({ score, label, grade, color }) {
+  const radius = 70;
   const circumference = 2 * Math.PI * radius;
-  const progress = (score / 100) * circumference;
-  const color = score >= 80 ? "#059669" : score >= 60 ? "#f59e0b" : "#dc2626";
+  const pctFill = Math.min(100, Math.max(0, score)) / 100;
+  const offset = circumference * (1 - pctFill * 0.75);
+
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
-      <svg width="140" height="140" viewBox="0 0 140 140" style={{ transform: "rotate(-90deg)" }}>
-        <circle cx="70" cy="70" r={radius} fill="none" stroke="#e5e7eb" strokeWidth={stroke} />
-        <circle cx="70" cy="70" r={radius} fill="none" stroke={color} strokeWidth={stroke}
-          strokeDasharray={circumference} strokeDashoffset={circumference - progress}
-          strokeLinecap="round" style={{ transition: "stroke-dashoffset 0.8s ease" }} />
-      </svg>
-      <div style={{ position: "relative", marginTop: -108, marginBottom: 48, textAlign: "center" }}>
-        <span style={{ fontSize: 32, fontWeight: 700, color: "#0f172a", fontFamily: "'Playfair Display', Georgia, serif" }}>{score}</span>
-        <span style={{ fontSize: 14, color: "#64748b", fontFamily: "'DM Sans', sans-serif" }}>/100</span>
-        <div style={{ fontSize: 13, fontWeight: 600, color, fontFamily: "'DM Sans', sans-serif", marginTop: 2 }}>Grade {grade}</div>
+      <div style={{ position: "relative", width: 180, height: 140 }}>
+        <svg viewBox="0 0 180 140" width="180" height="140">
+          <path
+            d="M 20 130 A 70 70 0 1 1 160 130"
+            fill="none"
+            stroke="#e2e8f0"
+            strokeWidth="12"
+            strokeLinecap="round"
+          />
+          <path
+            d="M 20 130 A 70 70 0 1 1 160 130"
+            fill="none"
+            stroke={color || "#3b82f6"}
+            strokeWidth="12"
+            strokeLinecap="round"
+            strokeDasharray={`${circumference * 0.75} ${circumference}`}
+            strokeDashoffset={offset}
+            style={{ transition: "stroke-dashoffset 1.5s ease-out" }}
+          />
+        </svg>
+        <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -10%)", textAlign: "center" }}>
+          <div style={{ fontSize: 36, fontWeight: 700, color: color || "#0f172a", lineHeight: 1, fontFamily: "'DM Sans', sans-serif" }}>{score}</div>
+          <div style={{ fontSize: 11, color: "#94a3b8", fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", fontFamily: "'DM Sans', sans-serif" }}>/ 100</div>
+        </div>
       </div>
-      <div style={{ fontSize: 12, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", color: "#64748b", fontFamily: "'DM Sans', sans-serif" }}>
-        Retirement Readiness
+      <div style={{ textAlign: "center" }}>
+        <span style={{ display: "inline-block", background: (color || "#3b82f6") + "18", color: color || "#3b82f6", padding: "4px 14px", borderRadius: 20, fontSize: 12, fontWeight: 700, fontFamily: "'DM Sans', sans-serif" }}>
+          {grade} — {label}
+        </span>
       </div>
     </div>
   );
 });
 
-const GrowthChart = memo(function GrowthChart({ data, reqCapital, retAge }) {
-  if (!data || data.length < 2) return null;
-  const W = 560, H = 220, padL = 56, padR = 20, padT = 20, padB = 36;
-  const cW = W - padL - padR, cH = H - padT - padB;
-  const maxVal = Math.max(...data.map(d => d.value), reqCapital) * 1.08;
-  const minVal = 0;
+// ─── Portfolio Growth Chart (pure SVG) ───────────────────────────────────────
 
-  const toX = (i) => padL + (i / (data.length - 1)) * cW;
-  const toY = (v) => padT + cH - ((v - minVal) / (maxVal - minVal)) * cH;
+const GrowthChart = memo(function GrowthChart({ timeline, retAge, reqCapital }) {
+  if (!timeline || timeline.length < 2) return null;
 
-  const growthLine = data.map((d, i) => `${i === 0 ? "M" : "L"}${toX(i).toFixed(1)},${toY(d.value).toFixed(1)}`).join(" ");
-  const contribLine = data.map((d, i) => `${i === 0 ? "M" : "L"}${toX(i).toFixed(1)},${toY(d.contributed).toFixed(1)}`).join(" ");
-  const areaPath = growthLine + ` L${toX(data.length - 1).toFixed(1)},${(padT + cH).toFixed(1)} L${padL},${(padT + cH).toFixed(1)} Z`;
+  const width = 700;
+  const height = 280;
+  const padL = 70, padR = 20, padT = 20, padB = 40;
+  const chartW = width - padL - padR;
+  const chartH = height - padT - padB;
 
-  const reqCapY = toY(reqCapital);
-  const yTicks = 4;
-  const xTickInterval = Math.max(1, Math.ceil(data.length / 6));
+  const maxVal = Math.max(...timeline.map(t => t.value), reqCapital || 0) * 1.1;
+  const minAge = timeline[0].age;
+  const maxAge = timeline[timeline.length - 1].age;
+  const ageRange = maxAge - minAge || 1;
+
+  const x = (age) => padL + ((age - minAge) / ageRange) * chartW;
+  const y = (val) => padT + chartH - (val / maxVal) * chartH;
+
+  const valueLine = timeline.map((t, i) => `${i === 0 ? "M" : "L"} ${x(t.age)} ${y(t.value)}`).join(" ");
+  const contributedLine = timeline.map((t, i) => `${i === 0 ? "M" : "L"} ${x(t.age)} ${y(t.contributed)}`).join(" ");
+
+  const areaPath = valueLine + ` L ${x(maxAge)} ${y(0)} L ${x(minAge)} ${y(0)} Z`;
+
+  const gridLines = [];
+  const numGridLines = 5;
+  for (let i = 0; i <= numGridLines; i++) {
+    const val = (maxVal / numGridLines) * i;
+    gridLines.push({ y: y(val), label: fmt(val) });
+  }
 
   return (
     <div style={{ width: "100%", overflowX: "auto" }}>
-      <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", maxWidth: W, height: "auto", display: "block" }}>
-        <defs>
-          <linearGradient id="growthFill" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#1e40af" stopOpacity="0.15" />
-            <stop offset="100%" stopColor="#1e40af" stopOpacity="0.02" />
-          </linearGradient>
-        </defs>
-        {/* Grid lines */}
-        {Array.from({ length: yTicks + 1 }, (_, i) => {
-          const val = minVal + (maxVal - minVal) * (i / yTicks);
-          const y = toY(val);
-          return (
-            <g key={i}>
-              <line x1={padL} y1={y} x2={W - padR} y2={y} stroke="#f1f5f9" strokeWidth="1" />
-              <text x={padL - 8} y={y + 4} textAnchor="end" fill="#94a3b8" fontSize="9" fontFamily="DM Sans, sans-serif">
-                {val >= 1000000 ? `$${(val / 1000000).toFixed(1)}M` : val >= 1000 ? `$${(val / 1000).toFixed(0)}K` : `$${val.toFixed(0)}`}
-              </text>
-            </g>
-          );
-        })}
-        {/* X labels */}
-        {data.map((d, i) => ({ d, i })).filter(({ i }) => i % xTickInterval === 0 || i === data.length - 1).map(({ d, i }) => (
-            <text key={i} x={toX(i)} y={H - 6} textAnchor="middle" fill="#94a3b8" fontSize="9" fontFamily="DM Sans, sans-serif">
-              Age {d.age}
-            </text>
+      <svg viewBox={`0 0 ${width} ${height}`} width="100%" style={{ maxWidth: width, display: "block", margin: "0 auto" }}>
+        {/* Grid */}
+        {gridLines.map((g, i) => (
+          <g key={i}>
+            <line x1={padL} y1={g.y} x2={width - padR} y2={g.y} stroke="#f1f5f9" strokeWidth="1" />
+            <text x={padL - 8} y={g.y + 4} textAnchor="end" fontSize="10" fill="#94a3b8" fontFamily="'DM Sans', sans-serif">{g.label}</text>
+          </g>
         ))}
+
         {/* Required capital line */}
-        {reqCapital > 0 && reqCapY >= padT && reqCapY <= padT + cH && (
+        {reqCapital > 0 && reqCapital <= maxVal && (
           <g>
-            <line x1={padL} y1={reqCapY} x2={W - padR} y2={reqCapY} stroke="#dc2626" strokeWidth="1" strokeDasharray="6,4" />
-            <text x={W - padR} y={reqCapY - 6} textAnchor="end" fill="#dc2626" fontSize="8" fontFamily="DM Sans, sans-serif" fontWeight="600">
-              Required Capital
+            <line x1={padL} y1={y(reqCapital)} x2={width - padR} y2={y(reqCapital)} stroke="#ef4444" strokeWidth="1.5" strokeDasharray="6 4" />
+            <text x={width - padR} y={y(reqCapital) - 6} textAnchor="end" fontSize="10" fill="#ef4444" fontWeight="600" fontFamily="'DM Sans', sans-serif">
+              Required: {fmt(reqCapital)}
             </text>
           </g>
         )}
-        {/* Contribution line */}
-        <path d={contribLine} fill="none" stroke="#94a3b8" strokeWidth="1.5" strokeDasharray="4,3" />
-        {/* Growth area & line */}
-        <path d={areaPath} fill="url(#growthFill)" />
-        <path d={growthLine} fill="none" stroke="#1e40af" strokeWidth="2.5" strokeLinejoin="round" />
-        {/* End dot */}
-        <circle cx={toX(data.length - 1)} cy={toY(data[data.length - 1].value)} r="4" fill="#1e40af" stroke="#fff" strokeWidth="2" />
+
+        {/* Area fill */}
+        <path d={areaPath} fill="url(#growthGradient)" opacity="0.15" />
+        <defs>
+          <linearGradient id="growthGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" stopColor="#3b82f6" />
+            <stop offset="100%" stopColor="#3b82f6" stopOpacity="0" />
+          </linearGradient>
+        </defs>
+
+        {/* Contributed line */}
+        <path d={contributedLine} fill="none" stroke="#94a3b8" strokeWidth="2" strokeDasharray="4 3" />
+
+        {/* Value line */}
+        <path d={valueLine} fill="none" stroke="#3b82f6" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+
+        {/* End point */}
+        <circle cx={x(maxAge)} cy={y(timeline[timeline.length - 1].value)} r="5" fill="#3b82f6" stroke="#fff" strokeWidth="2" />
+
+        {/* Age labels */}
+        {timeline.filter((_, i) => i % Math.max(1, Math.floor(timeline.length / 8)) === 0 || i === timeline.length - 1).map((t, i) => (
+          <text key={i} x={x(t.age)} y={height - 10} textAnchor="middle" fontSize="10" fill="#94a3b8" fontFamily="'DM Sans', sans-serif">
+            {t.age}
+          </text>
+        ))}
+
+        {/* Final value label */}
+        <text x={x(maxAge)} y={y(timeline[timeline.length - 1].value) - 12} textAnchor="middle" fontSize="11" fill="#1e40af" fontWeight="700" fontFamily="'DM Sans', sans-serif">
+          {fmt(timeline[timeline.length - 1].value)}
+        </text>
       </svg>
-      <div style={{ display: "flex", gap: 20, justifyContent: "center", marginTop: 10, fontFamily: "'DM Sans', sans-serif", fontSize: 11 }}>
-        <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <span style={{ width: 16, height: 3, background: "#1e40af", borderRadius: 2, display: "inline-block" }} /> Portfolio Growth
-        </span>
-        <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <span style={{ width: 16, height: 2, borderTop: "2px dashed #94a3b8", display: "inline-block" }} /> Contributions
-        </span>
+
+      {/* Legend */}
+      <div style={{ display: "flex", justifyContent: "center", gap: 24, marginTop: 8, fontFamily: "'DM Sans', sans-serif", fontSize: 11, color: "#64748b" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <div style={{ width: 20, height: 3, background: "#3b82f6", borderRadius: 2 }} />
+          Portfolio Value
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <div style={{ width: 20, height: 2, borderTop: "2px dashed #94a3b8" }} />
+          Total Contributed
+        </div>
         {reqCapital > 0 && (
-          <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <span style={{ width: 16, height: 2, borderTop: "2px dashed #dc2626", display: "inline-block" }} /> Required Capital
-          </span>
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <div style={{ width: 20, height: 2, borderTop: "2px dashed #ef4444" }} />
+            Required Capital
+          </div>
         )}
       </div>
     </div>
   );
 });
 
-const IncomeBreakdownBar = memo(function IncomeBreakdownBar({ investmentIncome, socialSecurity, desiredIncome }) {
-  const total = investmentIncome + socialSecurity;
-  const invPct = total > 0 ? (investmentIncome / total) * 100 : 0;
-  const ssPct = total > 0 ? (socialSecurity / total) * 100 : 0;
-  const goalPct = desiredIncome > 0 ? Math.min(100, (total / desiredIncome) * 100) : 100;
+// ─── Retirement Readiness Score Calculator ───────────────────────────────────
 
-  return (
-    <div style={{ fontFamily: "'DM Sans', sans-serif" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 12 }}>
-        <span style={{ fontSize: 12, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", color: "#64748b" }}>Income Breakdown</span>
-        <span style={{ fontSize: 13, fontWeight: 700, color: goalPct >= 100 ? "#059669" : "#dc2626" }}>
-          {goalPct.toFixed(0)}% of Goal
-        </span>
-      </div>
-      {/* Goal progress */}
-      <div style={{ height: 8, borderRadius: 4, background: "#e5e7eb", overflow: "hidden", marginBottom: 16 }}>
-        <div style={{
-          height: "100%",
-          width: `${Math.min(100, goalPct)}%`,
-          borderRadius: 4,
-          background: goalPct >= 100 ? "linear-gradient(90deg, #059669, #10b981)" : "linear-gradient(90deg, #f59e0b, #fbbf24)",
-          transition: "width 0.6s ease",
-        }} />
-      </div>
-      {/* Breakdown */}
-      <div style={{ display: "flex", gap: 16 }}>
-        <div style={{ flex: 1 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
-            <div style={{ width: 10, height: 10, borderRadius: 3, background: "#1e40af" }} />
-            <span style={{ fontSize: 12, color: "#64748b" }}>Investment Income</span>
-          </div>
-          <span style={{ fontSize: 18, fontWeight: 700, color: "#0f172a" }}>{fmt(investmentIncome)}<span style={{ fontSize: 12, fontWeight: 400, color: "#94a3b8" }}>/mo</span></span>
-          <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 2 }}>{invPct.toFixed(0)}% of total income</div>
-        </div>
-        <div style={{ flex: 1 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
-            <div style={{ width: 10, height: 10, borderRadius: 3, background: "#059669" }} />
-            <span style={{ fontSize: 12, color: "#64748b" }}>Social Security</span>
-          </div>
-          <span style={{ fontSize: 18, fontWeight: 700, color: "#0f172a" }}>{fmt(socialSecurity)}<span style={{ fontSize: 12, fontWeight: 400, color: "#94a3b8" }}>/mo</span></span>
-          <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 2 }}>{ssPct.toFixed(0)}% of total income</div>
-        </div>
-      </div>
-    </div>
-  );
-});
+function computeReadinessScore(calc) {
+  let total = 0;
+  const breakdown = {};
 
-const GrowthTimeline = memo(function GrowthTimeline({ data }) {
-  if (!data || data.length === 0) return null;
-  const maxVal = Math.max(...data.map(d => d.value));
-  const interval = data.length <= 10 ? 1 : data.length <= 20 ? 2 : 5;
-  const rows = data.filter((d, i) => i % interval === 0 || i === data.length - 1);
+  // Capital adequacy (0-30)
+  const capRatio = calc.reqCapital > 0 ? calc.projValue / calc.reqCapital : 1;
+  const capScore = Math.min(30, Math.round(capRatio * 30));
+  breakdown.capitalAdequacy = capScore;
+  total += capScore;
 
-  return (
-    <div style={{ overflowX: "auto" }}>
-      <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: "'DM Sans', sans-serif", fontSize: 13 }}>
-        <thead>
-          <tr style={{ background: "#f0f6ff" }}>
-            <th style={{ padding: "10px 14px", textAlign: "left", fontWeight: 700, color: "#1e3a8a", letterSpacing: "0.04em", fontSize: 11 }}>Age</th>
-            <th style={{ padding: "10px 14px", textAlign: "left", fontWeight: 700, color: "#1e3a8a", letterSpacing: "0.04em", fontSize: 11 }}>Year</th>
-            <th style={{ padding: "10px 14px", textAlign: "right", fontWeight: 700, color: "#1e3a8a", letterSpacing: "0.04em", fontSize: 11 }}>Contributed</th>
-            <th style={{ padding: "10px 14px", textAlign: "right", fontWeight: 700, color: "#1e3a8a", letterSpacing: "0.04em", fontSize: 11 }}>Portfolio Value</th>
-            <th style={{ padding: "10px 14px", textAlign: "right", fontWeight: 700, color: "#1e3a8a", letterSpacing: "0.04em", fontSize: 11 }}>Growth</th>
-            <th style={{ padding: "10px 14px", fontWeight: 700, color: "#1e3a8a", letterSpacing: "0.04em", fontSize: 11, minWidth: 120 }}>Progress</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((d, i) => {
-            const growth = d.value - d.contributed;
-            const pctFill = maxVal > 0 ? (d.value / maxVal) * 100 : 0;
-            return (
-              <tr key={d.age} style={{ background: i % 2 === 0 ? "#f8fafc" : "#fff" }}>
-                <td style={{ padding: "8px 14px", fontWeight: 600, color: "#0f172a" }}>{d.age}</td>
-                <td style={{ padding: "8px 14px", color: "#64748b" }}>{d.year}</td>
-                <td style={{ padding: "8px 14px", textAlign: "right", color: "#64748b" }}>{fmt(d.contributed)}</td>
-                <td style={{ padding: "8px 14px", textAlign: "right", fontWeight: 600, color: "#1e3a8a" }}>{fmt(d.value)}</td>
-                <td style={{ padding: "8px 14px", textAlign: "right", color: growth >= 0 ? "#059669" : "#dc2626", fontWeight: 500 }}>
-                  {growth >= 0 ? "+" : ""}{fmt(growth)}
-                </td>
-                <td style={{ padding: "8px 14px" }}>
-                  <div style={{ height: 6, borderRadius: 3, background: "#e5e7eb", overflow: "hidden" }}>
-                    <div style={{ height: "100%", width: `${pctFill}%`, borderRadius: 3, background: "linear-gradient(90deg, #3b82f6, #1e40af)", transition: "width 0.4s ease" }} />
-                  </div>
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
-  );
-});
+  // Income replacement (0-25)
+  const incomeRatio = calc.desiredMo > 0 ? calc.totalMo / calc.desiredMo : 1;
+  const incomeScore = Math.min(25, Math.round(incomeRatio * 25));
+  breakdown.incomeReplacement = incomeScore;
+  total += incomeScore;
+
+  // Time horizon (0-15)
+  const timeScore = calc.years >= 20 ? 15 : calc.years >= 10 ? 12 : calc.years >= 5 ? 8 : 4;
+  breakdown.timeHorizon = timeScore;
+  total += timeScore;
+
+  // Contribution effort (0-15)
+  const contribRatio = calc.neededPMT > 0 ? Math.min(1, calc.pmt / calc.neededPMT) : 1;
+  const contribScore = Math.min(15, Math.round(contribRatio * 15));
+  breakdown.contributionEffort = contribScore;
+  total += contribScore;
+
+  // Safety & diversification (0-15)
+  let safetyScore = 5;
+  if (calc.ss > 0) safetyScore += 5;
+  if (calc.years >= 10) safetyScore += 3;
+  if (calc.r <= 0.14) safetyScore += 2;
+  safetyScore = Math.min(15, safetyScore);
+  breakdown.safetyNet = safetyScore;
+  total += safetyScore;
+
+  total = Math.min(100, total);
+
+  let grade, label, color;
+  if (total >= 90) { grade = "A+"; label = "Excellent"; color = "#059669"; }
+  else if (total >= 80) { grade = "A"; label = "Very Strong"; color = "#10b981"; }
+  else if (total >= 70) { grade = "B+"; label = "Good"; color = "#3b82f6"; }
+  else if (total >= 60) { grade = "B"; label = "On Track"; color = "#6366f1"; }
+  else if (total >= 50) { grade = "C+"; label = "Needs Attention"; color = "#f59e0b"; }
+  else if (total >= 40) { grade = "C"; label = "At Risk"; color = "#f97316"; }
+  else if (total >= 25) { grade = "D"; label = "Significant Gap"; color = "#ef4444"; }
+  else { grade = "F"; label = "Critical"; color = "#dc2626"; }
+
+  return { total, grade, label, color, breakdown };
+}
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
@@ -435,36 +519,20 @@ export default function RetirementCalculator() {
 
     const neededPMT = requiredPMT(reqCapital, pv, r, months);
 
-    // Growth timeline data for chart visualization
-    const growthData = [];
-    for (let yr = 0; yr <= years; yr++) {
-      const val = fv(pv, pmt, r, yr * 12);
-      growthData.push({
-        age: curAge + yr,
-        year: yr,
-        value: val,
-        contributed: pv + (pmt * yr * 12),
-      });
-    }
-
-    // Readiness score (0–100)
-    const readinessScore = desiredMo > 0 ? Math.min(100, Math.round((totalMo / desiredMo) * 100)) : 100;
-    const readinessGrade =
-      readinessScore >= 95 ? "A+" :
-      readinessScore >= 85 ? "A" :
-      readinessScore >= 75 ? "B+" :
-      readinessScore >= 65 ? "B" :
-      readinessScore >= 50 ? "C" : "D";
-
     return {
       curAge, retAge, pv, pmt, desiredMo, ss,
       years, months, wdRate, projValue,
       netMoGoal, netAnnGoal, reqCapital,
       estMoInv, totalMo, moDiff, capDiff, meetsGoal, neededPMT,
       fund, r,
-      growthData, readinessScore, readinessGrade,
     };
   }, [currentAge, incomeStartAge, initialInvestment, monthlyContribution, desiredMonthlyIncome, socialSecurityIncome, fundKey, incomeType]);
+
+  // Readiness score
+  const readiness = useMemo(() => computeReadinessScore(calc), [calc]);
+
+  // Growth timeline
+  const timeline = useMemo(() => buildGrowthTimeline(calc.pv, calc.pmt, calc.r, calc.curAge, calc.retAge), [calc]);
 
   // State object for the copilot agent
   const copilotCalcState = useMemo(() => ({
@@ -605,7 +673,7 @@ export default function RetirementCalculator() {
     setTimeout(() => URL.revokeObjectURL(url), 10000);
   }, [buildReport]);
 
-  const handleExportPDF = useCallback(() => {
+  const handleExportHTML = useCallback(() => {
     const html = buildReport();
     const blob = new Blob([html], { type: "text/html;charset=utf-8" });
     const url = URL.createObjectURL(blob);
@@ -632,121 +700,158 @@ export default function RetirementCalculator() {
       joint: PACIFIC_RATES.jointLife[age],
     })), []);
 
-  const tabs = ["inputs", "results", "summary", "rates"];
+  const tabs = ["inputs", "results", "projections", "summary", "rates"];
 
   return (
     <div style={{
       minHeight: "100vh",
       background: "linear-gradient(160deg, #f0f4ff 0%, #f8fafc 40%, #f0f9ff 100%)",
-      fontFamily: "'Georgia', 'Times New Roman', serif",
+      fontFamily: "'DM Sans', -apple-system, sans-serif",
       color: "#0f172a",
+      display: "flex",
+      flexDirection: "column",
     }}>
-      <style>{`
-        * { box-sizing: border-box; }
-        body { margin: 0; }
-        @media print {
-          body { background: white !important; }
-          .no-print { display: none !important; }
-          .print-card { box-shadow: none !important; border: 1px solid #e2e8f0 !important; }
-          @page { size: letter; margin: 0.5in; }
-        }
-        input:focus, select:focus { outline: none; }
-        .tab-btn { cursor: pointer; transition: all 0.2s; }
-        .tab-btn:hover { background: rgba(30,64,175,0.06) !important; }
-        @media (max-width: 768px) {
-          .readiness-growth-grid { grid-template-columns: 1fr !important; }
-        }
-      `}</style>
+      <style>{GLOBAL_CSS}</style>
 
-      {/* Header */}
+      {/* ══════════════════════════════════════════════════════════════════════
+           HEADER
+          ══════════════════════════════════════════════════════════════════════ */}
       <div style={{
-        background: "linear-gradient(135deg, #0f1e4a 0%, #1e3a8a 50%, #1e40af 100%)",
-        padding: "28px 32px",
+        background: "linear-gradient(135deg, #0a1628 0%, #0f1e4a 30%, #1e3a8a 65%, #2563eb 100%)",
+        padding: "32px 32px 0",
         position: "relative",
         overflow: "hidden",
       }}>
-        {/* decorative circles */}
-        <div style={{ position: "absolute", top: -40, right: -40, width: 200, height: 200, borderRadius: "50%", background: "rgba(255,255,255,0.04)", pointerEvents: "none" }} />
-        <div style={{ position: "absolute", bottom: -60, left: "30%", width: 160, height: 160, borderRadius: "50%", background: "rgba(255,255,255,0.03)", pointerEvents: "none" }} />
+        {/* Decorative elements */}
+        <div style={{ position: "absolute", top: -60, right: -60, width: 300, height: 300, borderRadius: "50%", background: "rgba(59,130,246,0.08)", pointerEvents: "none" }} />
+        <div style={{ position: "absolute", bottom: -80, left: "20%", width: 200, height: 200, borderRadius: "50%", background: "rgba(255,255,255,0.03)", pointerEvents: "none" }} />
+        <div style={{ position: "absolute", top: 20, left: "60%", width: 100, height: 100, borderRadius: "50%", background: "rgba(59,130,246,0.05)", pointerEvents: "none" }} />
 
-        <div style={{ maxWidth: 1200, margin: "0 auto", display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 20 }}>
-          <div>
-            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
-              <span style={{ background: "rgba(255,255,255,0.12)", border: "1px solid rgba(255,255,255,0.2)", borderRadius: 20, padding: "3px 12px", fontSize: 11, fontFamily: "'DM Sans', sans-serif", fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", color: "rgba(255,255,255,0.75)" }}>
-                Internal Use Only
-              </span>
+        <div style={{ maxWidth: 1280, margin: "0 auto", position: "relative", zIndex: 1 }}>
+          {/* Top bar */}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 20, marginBottom: 8 }}>
+            <div>
+              <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
+                <span style={{ background: "rgba(59,130,246,0.2)", border: "1px solid rgba(59,130,246,0.3)", borderRadius: 20, padding: "4px 14px", fontSize: 10, fontWeight: 700, letterSpacing: "0.14em", textTransform: "uppercase", color: "rgba(147,197,253,0.9)" }}>
+                  Internal Use Only
+                </span>
+                <span style={{ background: "rgba(16,185,129,0.15)", border: "1px solid rgba(16,185,129,0.25)", borderRadius: 20, padding: "4px 14px", fontSize: 10, fontWeight: 700, letterSpacing: "0.14em", textTransform: "uppercase", color: "#6ee7b7" }}>
+                  Live Calculations
+                </span>
+              </div>
+              <h1 style={{ margin: 0, fontSize: 32, fontFamily: "'Playfair Display', Georgia, serif", fontWeight: 700, color: "#fff", letterSpacing: "-0.02em", lineHeight: 1.15 }}>
+                Retirement Income<br />Projection Calculator
+              </h1>
+              <p style={{ margin: "12px 0 0", fontSize: 13, color: "rgba(148,163,184,0.8)", maxWidth: 520, lineHeight: 1.7 }}>
+                ANWPX · AGTHX · Pacific Life Lifetime Income Creator · Social Security Integration
+              </p>
             </div>
-            <h1 style={{ margin: 0, fontSize: 28, fontFamily: "'Playfair Display', Georgia, serif", fontWeight: 700, color: "#fff", letterSpacing: "-0.01em", lineHeight: 1.2 }}>
-              Retirement Income<br />Projection Calculator
-            </h1>
-            <p style={{ margin: "10px 0 0", fontSize: 13, color: "rgba(255,255,255,0.6)", fontFamily: "'DM Sans', sans-serif", maxWidth: 520, lineHeight: 1.6 }}>
-              ANWPX · AGTHX · Pacific Life Lifetime Income Creator · Social Security integration
-            </p>
+            <div className="no-print" style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+              <button className="btn-hover" onClick={handlePrint} style={{
+                background: "#fff", color: "#1e3a8a", border: "none", borderRadius: 12,
+                padding: "11px 22px", fontWeight: 600,
+                fontSize: 13, cursor: "pointer", display: "flex", alignItems: "center", gap: 8,
+                boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
+              }}>
+                🖨️ Print Report
+              </button>
+              <button className="btn-hover" onClick={handleExportHTML} style={{
+                background: "rgba(255,255,255,0.1)", color: "#fff", border: "1px solid rgba(255,255,255,0.2)",
+                borderRadius: 12, padding: "11px 22px",
+                fontWeight: 600, fontSize: 13, cursor: "pointer", display: "flex", alignItems: "center", gap: 8,
+                backdropFilter: "blur(10px)",
+              }}>
+                ⬇️ Export HTML
+              </button>
+            </div>
           </div>
-          <div className="no-print" style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-            <button onClick={handlePrint} style={{
-              background: "#fff", color: "#1e3a8a", border: "none", borderRadius: 12,
-              padding: "10px 20px", fontFamily: "'DM Sans', sans-serif", fontWeight: 600,
-              fontSize: 13, cursor: "pointer", display: "flex", alignItems: "center", gap: 8,
-            }}>
-              🖨️ Print
-            </button>
-            <button onClick={handleExportPDF} style={{
-              background: "rgba(255,255,255,0.12)", color: "#fff", border: "1px solid rgba(255,255,255,0.25)",
-              borderRadius: 12, padding: "10px 20px", fontFamily: "'DM Sans', sans-serif",
-              fontWeight: 600, fontSize: 13, cursor: "pointer", display: "flex", alignItems: "center", gap: 8,
-            }}>
-              ⬇️ Export PDF
-            </button>
-          </div>
-        </div>
 
-        {/* Tabs */}
-        <div className="no-print" style={{ maxWidth: 1200, margin: "20px auto 0", display: "flex", gap: 4 }}>
-          {tabs.map(tab => (
-            <button
-              key={tab}
-              className="tab-btn"
-              onClick={() => setActiveTab(tab)}
-              style={{
-                background: activeTab === tab ? "rgba(255,255,255,0.18)" : "transparent",
-                border: activeTab === tab ? "1px solid rgba(255,255,255,0.25)" : "1px solid transparent",
-                borderRadius: 10,
-                padding: "8px 18px",
-                color: activeTab === tab ? "#fff" : "rgba(255,255,255,0.55)",
-                fontFamily: "'DM Sans', sans-serif",
-                fontWeight: 600,
-                fontSize: 13,
-                letterSpacing: "0.04em",
-                textTransform: "capitalize",
-                cursor: "pointer",
-              }}
-            >
-              {tab === "inputs" ? "📋 Inputs" : tab === "results" ? "📊 Results" : tab === "summary" ? "📄 Summary" : "📈 Rate Table"}
-            </button>
-          ))}
+          {/* Quick stats bar */}
+          <div className="no-print" style={{ display: "flex", gap: 24, flexWrap: "wrap", margin: "20px 0 24px", padding: "14px 20px", background: "rgba(255,255,255,0.06)", borderRadius: 14, border: "1px solid rgba(255,255,255,0.08)", backdropFilter: "blur(10px)" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ fontSize: 13 }}>📊</span>
+              <span style={{ fontSize: 12, color: "rgba(148,163,184,0.7)" }}>Score</span>
+              <span style={{ fontSize: 13, fontWeight: 700, color: readiness.color }}>{readiness.total}</span>
+              <span style={{ fontSize: 11, color: readiness.color, fontWeight: 600 }}>{readiness.grade}</span>
+            </div>
+            <div style={{ width: 1, height: 20, background: "rgba(255,255,255,0.1)" }} />
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ fontSize: 13 }}>💰</span>
+              <span style={{ fontSize: 12, color: "rgba(148,163,184,0.7)" }}>Projected</span>
+              <span style={{ fontSize: 13, fontWeight: 700, color: "#fff" }}>{fmt(c.projValue)}</span>
+            </div>
+            <div style={{ width: 1, height: 20, background: "rgba(255,255,255,0.1)" }} />
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ fontSize: 13 }}>{c.meetsGoal ? "✅" : "⚠️"}</span>
+              <span style={{ fontSize: 12, color: "rgba(148,163,184,0.7)" }}>Income</span>
+              <span style={{ fontSize: 13, fontWeight: 700, color: c.meetsGoal ? "#6ee7b7" : "#fca5a5" }}>{fmt(c.totalMo)}/mo</span>
+            </div>
+            <div style={{ width: 1, height: 20, background: "rgba(255,255,255,0.1)" }} />
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ fontSize: 13 }}>⏱</span>
+              <span style={{ fontSize: 12, color: "rgba(148,163,184,0.7)" }}>Timeline</span>
+              <span style={{ fontSize: 13, fontWeight: 700, color: "#fff" }}>{c.years} years</span>
+            </div>
+          </div>
+
+          {/* Tabs */}
+          <div className="no-print" style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+            {tabs.map(tab => {
+              const isActive = activeTab === tab;
+              const labels = {
+                inputs: "📋 Inputs",
+                results: "📊 Results",
+                projections: "📈 Projections",
+                summary: "📄 Summary",
+                rates: "🔒 Rate Table",
+              };
+              return (
+                <button
+                  key={tab}
+                  className="tab-btn"
+                  onClick={() => setActiveTab(tab)}
+                  style={{
+                    background: isActive ? "rgba(255,255,255,0.15)" : "transparent",
+                    border: isActive ? "1px solid rgba(255,255,255,0.2)" : "1px solid transparent",
+                    borderBottom: isActive ? "2px solid #3b82f6" : "2px solid transparent",
+                    borderRadius: "10px 10px 0 0",
+                    padding: "10px 20px",
+                    color: isActive ? "#fff" : "rgba(148,163,184,0.6)",
+                    fontWeight: 600,
+                    fontSize: 13,
+                    letterSpacing: "0.02em",
+                    cursor: "pointer",
+                  }}
+                >
+                  {labels[tab]}
+                </button>
+              );
+            })}
+          </div>
         </div>
       </div>
 
-      {/* Content */}
-      <div style={{ maxWidth: 1200, margin: "0 auto", padding: "32px 24px" }}>
+      {/* ══════════════════════════════════════════════════════════════════════
+           CONTENT AREA
+          ══════════════════════════════════════════════════════════════════════ */}
+      <div style={{ maxWidth: 1280, margin: "0 auto", padding: "32px 24px", width: "100%", flex: 1 }}>
 
         {/* ── INPUTS TAB ── */}
         {(activeTab === "inputs") && (
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))", gap: 24 }}>
+          <div className="animate-in" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))", gap: 24 }}>
 
             {/* Profile Card */}
-            <div className="print-card" style={{ background: "#fff", borderRadius: 20, border: "1.5px solid #e8eef6", padding: 28, boxShadow: "0 4px 24px rgba(15,23,42,0.06)" }}>
-              <SectionLabel>Profile</SectionLabel>
+            <div className="print-card card-hover" style={{ background: "#fff", borderRadius: 20, border: "1.5px solid #e8eef6", padding: 28, boxShadow: "0 4px 24px rgba(15,23,42,0.06)" }}>
+              <SectionLabel icon="👤">Profile</SectionLabel>
               <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-                <InputField label="Client Name" id="clientName" value={clientName} onChange={e => setClientName(e.target.value)} />
+                <InputField label="Client Name" id="clientName" value={clientName} onChange={e => setClientName(e.target.value)} placeholder="Enter client name" />
                 <InputField label="Prepared By" id="advisorName" value={advisorName} onChange={e => setAdvisorName(e.target.value)} />
               </div>
             </div>
 
             {/* Retirement Profile */}
-            <div className="print-card" style={{ background: "#fff", borderRadius: 20, border: "1.5px solid #e8eef6", padding: 28, boxShadow: "0 4px 24px rgba(15,23,42,0.06)" }}>
-              <SectionLabel>Retirement Profile</SectionLabel>
+            <div className="print-card card-hover" style={{ background: "#fff", borderRadius: 20, border: "1.5px solid #e8eef6", padding: 28, boxShadow: "0 4px 24px rgba(15,23,42,0.06)" }}>
+              <SectionLabel icon="🎂">Retirement Profile</SectionLabel>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
                 <InputField label="Current Age" id="curAge" value={currentAge} onChange={e => setCurrentAge(e.target.value)} inputMode="numeric" hint="Ages 50–80" />
                 <InputField label="Income Start Age" id="retAge" value={incomeStartAge} onChange={e => setIncomeStartAge(e.target.value)} inputMode="numeric" hint="Ages 50–80" />
@@ -762,20 +867,20 @@ export default function RetirementCalculator() {
                   ]}
                 />
               </div>
-              <div style={{ marginTop: 16, background: "#f0f6ff", borderRadius: 12, padding: "12px 16px" }}>
-                <p style={{ margin: 0, fontSize: 12, color: "#1e40af", fontFamily: "'DM Sans', sans-serif" }}>
+              <div style={{ marginTop: 16, background: "linear-gradient(135deg, #eff6ff, #f0f9ff)", borderRadius: 12, padding: "14px 16px", border: "1px solid #bfdbfe" }}>
+                <p style={{ margin: 0, fontSize: 13, color: "#1e40af" }}>
                   ⏱ <strong>{c.years} years</strong> until income begins · Pacific Life rate: <strong>{pct(c.wdRate)}</strong>
                 </p>
               </div>
             </div>
 
             {/* Investment Assumptions */}
-            <div className="print-card" style={{ background: "#fff", borderRadius: 20, border: "1.5px solid #e8eef6", padding: 28, boxShadow: "0 4px 24px rgba(15,23,42,0.06)" }}>
-              <SectionLabel>Investment Assumptions</SectionLabel>
+            <div className="print-card card-hover" style={{ background: "#fff", borderRadius: 20, border: "1.5px solid #e8eef6", padding: 28, boxShadow: "0 4px 24px rgba(15,23,42,0.06)" }}>
+              <SectionLabel icon="📈">Investment Assumptions</SectionLabel>
               <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-                  <InputField label="Initial Investment ($)" id="pv" value={initialInvestment} onChange={e => setInitialInvestment(e.target.value)} inputMode="decimal" />
-                  <InputField label="Monthly Contribution ($)" id="pmt" value={monthlyContribution} onChange={e => setMonthlyContribution(e.target.value)} inputMode="decimal" />
+                  <InputField label="Initial Investment" id="pv" value={initialInvestment} onChange={e => setInitialInvestment(e.target.value)} inputMode="decimal" prefix="$" />
+                  <InputField label="Monthly Contribution" id="pmt" value={monthlyContribution} onChange={e => setMonthlyContribution(e.target.value)} inputMode="decimal" prefix="$" />
                 </div>
                 <SelectField
                   label="Growth Assumption"
@@ -787,35 +892,41 @@ export default function RetirementCalculator() {
                     { value: "BLEND", label: "50/50 Blend ANWPX + AGTHX (12.97%)" },
                   ]}
                 />
-                <div style={{ background: "#f0f6ff", borderRadius: 12, padding: "12px 16px" }}>
-                  <p style={{ margin: 0, fontSize: 12, color: "#1e40af", fontFamily: "'DM Sans', sans-serif" }}>
-                    📈 Selected rate: <strong>{pct(c.r)}</strong> annually · Projected value: <strong>{fmt(c.projValue)}</strong>
+                {/* Fund info badge */}
+                <div style={{ background: "linear-gradient(135deg, #eff6ff, #f0f9ff)", borderRadius: 12, padding: "14px 16px", border: "1px solid #bfdbfe" }}>
+                  <p style={{ margin: 0, fontSize: 13, color: "#1e40af" }}>
+                    📈 Selected rate: <strong>{pct(c.r)}</strong> annually · Projected value at retirement: <strong>{fmt(c.projValue)}</strong>
+                  </p>
+                  <p style={{ margin: "6px 0 0", fontSize: 11, color: "#6b7280" }}>
+                    {FUND_OPTIONS[fundKey].description}
                   </p>
                 </div>
               </div>
             </div>
 
             {/* Income Goal */}
-            <div className="print-card" style={{ background: "#fff", borderRadius: 20, border: "1.5px solid #e8eef6", padding: 28, boxShadow: "0 4px 24px rgba(15,23,42,0.06)" }}>
-              <SectionLabel>Income Goal</SectionLabel>
+            <div className="print-card card-hover" style={{ background: "#fff", borderRadius: 20, border: "1.5px solid #e8eef6", padding: 28, boxShadow: "0 4px 24px rgba(15,23,42,0.06)" }}>
+              <SectionLabel icon="🎯">Income Goal</SectionLabel>
               <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
                 <InputField
-                  label="Desired Monthly Retirement Income ($)"
+                  label="Desired Monthly Retirement Income"
                   id="desiredIncome"
                   value={desiredMonthlyIncome}
                   onChange={e => setDesiredMonthlyIncome(e.target.value)}
                   inputMode="decimal"
+                  prefix="$"
                 />
                 <InputField
-                  label="Monthly Social Security ($)"
+                  label="Monthly Social Security"
                   id="ss"
                   value={socialSecurityIncome}
                   onChange={e => setSocialSecurityIncome(e.target.value)}
                   inputMode="decimal"
-                  hint="User estimate"
+                  prefix="$"
+                  hint="User estimate — not verified"
                 />
-                <div style={{ background: "#f0f6ff", borderRadius: 12, padding: "12px 16px" }}>
-                  <p style={{ margin: 0, fontSize: 12, color: "#1e40af", fontFamily: "'DM Sans', sans-serif" }}>
+                <div style={{ background: "linear-gradient(135deg, #eff6ff, #f0f9ff)", borderRadius: 12, padding: "14px 16px", border: "1px solid #bfdbfe" }}>
+                  <p style={{ margin: 0, fontSize: 13, color: "#1e40af" }}>
                     💡 Net from investments: <strong>{fmt(c.netMoGoal)}/mo</strong> · Required capital: <strong>{fmt(c.reqCapital)}</strong>
                   </p>
                 </div>
@@ -826,87 +937,90 @@ export default function RetirementCalculator() {
 
         {/* ── RESULTS TAB ── */}
         {(activeTab === "results") && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+          <div className="animate-in" style={{ display: "flex", flexDirection: "column", gap: 24 }}>
 
-            {/* Status Banner */}
-            <div style={{
-              background: goalBg,
-              border: `2px solid ${goalBorder}`,
-              borderRadius: 20,
-              padding: "24px 28px",
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              flexWrap: "wrap",
-              gap: 16,
-            }}>
-              <div>
-                <p style={{ margin: 0, fontSize: 12, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: goalColor, fontFamily: "'DM Sans', sans-serif" }}>
-                  {c.meetsGoal ? "✓ Income Goal Met" : "✗ Income Goal Not Met"}
-                </p>
-                <p style={{ margin: "8px 0 0", fontSize: 32, fontWeight: 700, color: "#0f172a", fontFamily: "'Playfair Display', Georgia, serif", letterSpacing: "-0.02em" }}>
-                  {fmt(c.totalMo)}<span style={{ fontSize: 16, fontWeight: 400, color: "#64748b" }}>/mo total</span>
-                </p>
-                <p style={{ margin: "6px 0 0", fontSize: 13, color: "#64748b", fontFamily: "'DM Sans', sans-serif" }}>
-                  {c.meetsGoal
-                    ? `Exceeds desired income by ${fmt(c.moDiff)}/mo`
-                    : `Short of desired income by ${fmt(Math.abs(c.moDiff))}/mo`}
-                </p>
+            {/* Top row: Status banner + Readiness Score */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 24, alignItems: "stretch" }}>
+              {/* Status Banner */}
+              <div style={{
+                background: goalBg,
+                border: `2px solid ${goalBorder}`,
+                borderRadius: 20,
+                padding: "28px 32px",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                flexWrap: "wrap",
+                gap: 16,
+              }}>
+                <div>
+                  <p style={{ margin: 0, fontSize: 11, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: goalColor }}>
+                    {c.meetsGoal ? "✓ Income Goal Met" : "✗ Income Goal Not Met"}
+                  </p>
+                  <p style={{ margin: "10px 0 0", fontSize: 36, fontWeight: 700, color: "#0f172a", fontFamily: "'Playfair Display', Georgia, serif", letterSpacing: "-0.02em" }}>
+                    {fmt(c.totalMo)}<span style={{ fontSize: 16, fontWeight: 400, color: "#64748b" }}> /mo total</span>
+                  </p>
+                  <p style={{ margin: "8px 0 0", fontSize: 13, color: "#64748b" }}>
+                    {c.meetsGoal
+                      ? `Exceeds desired income by ${fmt(c.moDiff)}/mo`
+                      : `Short of desired income by ${fmt(Math.abs(c.moDiff))}/mo`}
+                  </p>
+                  <div style={{ display: "grid", gridTemplateColumns: "auto auto", gap: "6px 20px", marginTop: 14 }}>
+                    <span style={{ fontSize: 12, color: "#64748b" }}>Investment income</span>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: "#0f172a" }}>{fmt(c.estMoInv)}/mo</span>
+                    <span style={{ fontSize: 12, color: "#64748b" }}>Social Security</span>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: "#0f172a" }}>{fmt(c.ss)}/mo</span>
+                    <span style={{ fontSize: 12, color: "#64748b" }}>Net needed from investments</span>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: "#1e40af" }}>{fmt(c.netMoGoal)}/mo</span>
+                  </div>
+                </div>
               </div>
-              <div style={{ display: "grid", gridTemplateColumns: "auto auto", gap: "8px 24px", fontFamily: "'DM Sans', sans-serif" }}>
-                <span style={{ fontSize: 12, color: "#64748b" }}>Investment income</span>
-                <span style={{ fontSize: 13, fontWeight: 600, color: "#0f172a" }}>{fmt(c.estMoInv)}/mo</span>
-                <span style={{ fontSize: 12, color: "#64748b" }}>Social Security</span>
-                <span style={{ fontSize: 13, fontWeight: 600, color: "#0f172a" }}>{fmt(c.ss)}/mo</span>
-                <span style={{ fontSize: 12, color: "#64748b" }}>Net needed from investments</span>
-                <span style={{ fontSize: 13, fontWeight: 600, color: "#1e40af" }}>{fmt(c.netMoGoal)}/mo</span>
+
+              {/* Readiness Score */}
+              <div style={{ background: "#fff", borderRadius: 20, border: "1.5px solid #e8eef6", padding: "24px 32px", boxShadow: "0 4px 24px rgba(15,23,42,0.06)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minWidth: 220 }}>
+                <ReadinessGauge score={readiness.total} label={readiness.label} grade={readiness.grade} color={readiness.color} />
+                <p style={{ margin: "12px 0 0", fontSize: 11, color: "#94a3b8", textAlign: "center" }}>Retirement Readiness</p>
               </div>
             </div>
 
             {/* Metric Grid */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 16 }}>
-              <MetricTile label="Projected Retirement Value" value={fmt(c.projValue)} icon="🏦" sub={`After ${c.years} yrs at ${pct(c.r)}`} accent large />
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 16 }}>
+              <MetricTile label="Projected Retirement Value" value={fmt(c.projValue)} icon="🏦" sub={`After ${c.years} yrs at ${pct(c.r)}`} accent />
               <MetricTile label="Required Capital" value={fmt(c.reqCapital)} icon="🎯" sub={`Net goal ÷ ${pct(c.wdRate)} rate`} />
               <MetricTile label="Capital Surplus / Shortfall" value={`${c.capDiff >= 0 ? "+" : "-"}${fmt(Math.abs(c.capDiff))}`} icon={c.capDiff >= 0 ? "✅" : "⚠️"} sub="Projected vs. required" />
-              <MetricTile label="Net Monthly Goal (Investments)" value={fmt(c.netMoGoal)} icon="💼" sub="After Social Security" />
-              <MetricTile label="Required Monthly Contribution" value={fmt(c.neededPMT)} icon="📅" sub="To hit net capital goal" />
-              <MetricTile label="Pacific Life Withdrawal Rate" value={pct(c.wdRate)} icon="🔒" sub={`Age ${c.retAge} · ${incomeType === "singleLife" ? "Single" : "Joint"} Life`} accent />
+              <MetricTile label="Net Monthly Goal" value={fmt(c.netMoGoal)} icon="💼" sub="After Social Security" />
+              <MetricTile label="Required Monthly Contribution" value={fmt(c.neededPMT)} icon="📅" sub="To hit capital goal" />
+              <MetricTile label="Pacific Life Rate" value={pct(c.wdRate)} icon="🔒" sub={`Age ${c.retAge} · ${incomeType === "singleLife" ? "Single" : "Joint"} Life`} />
             </div>
 
-            {/* Readiness & Growth Row */}
-            <div className="readiness-growth-grid" style={{ display: "grid", gridTemplateColumns: "280px 1fr", gap: 24, alignItems: "stretch" }}>
-              {/* Readiness Gauge */}
-              <div className="print-card" style={{ background: "#fff", borderRadius: 20, border: "1.5px solid #e8eef6", padding: 28, boxShadow: "0 4px 24px rgba(15,23,42,0.06)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
-                <ReadinessGauge score={c.readinessScore} grade={c.readinessGrade} meetsGoal={c.meetsGoal} />
-                <div style={{ marginTop: 12, padding: "8px 14px", borderRadius: 10, background: c.meetsGoal ? "#ecfdf5" : "#fef2f2", textAlign: "center" }}>
-                  <span style={{ fontSize: 12, fontWeight: 600, color: c.meetsGoal ? "#059669" : "#dc2626", fontFamily: "'DM Sans', sans-serif" }}>
-                    {c.meetsGoal ? "On Track" : "Action Needed"}
-                  </span>
-                </div>
-              </div>
-
-              {/* Growth Chart */}
-              <div className="print-card" style={{ background: "#fff", borderRadius: 20, border: "1.5px solid #e8eef6", padding: 28, boxShadow: "0 4px 24px rgba(15,23,42,0.06)" }}>
-                <SectionLabel>Portfolio Growth Projection</SectionLabel>
-                <GrowthChart data={c.growthData} reqCapital={c.reqCapital} retAge={c.retAge} />
-              </div>
-            </div>
-
-            {/* Income Breakdown */}
+            {/* Readiness Score Breakdown */}
             <div className="print-card" style={{ background: "#fff", borderRadius: 20, border: "1.5px solid #e8eef6", padding: 28, boxShadow: "0 4px 24px rgba(15,23,42,0.06)" }}>
-              <IncomeBreakdownBar investmentIncome={c.estMoInv} socialSecurity={c.ss} desiredIncome={c.desiredMo} />
-            </div>
-
-            {/* Growth Timeline */}
-            <div className="print-card" style={{ background: "#fff", borderRadius: 20, border: "1.5px solid #e8eef6", padding: 28, boxShadow: "0 4px 24px rgba(15,23,42,0.06)" }}>
-              <SectionLabel>Year-by-Year Growth Timeline</SectionLabel>
-              <GrowthTimeline data={c.growthData} />
+              <SectionLabel icon="📊">Readiness Score Breakdown</SectionLabel>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12, marginTop: 8 }}>
+                {[
+                  { label: "Capital Adequacy", value: readiness.breakdown.capitalAdequacy, max: 30, color: "#3b82f6" },
+                  { label: "Income Replacement", value: readiness.breakdown.incomeReplacement, max: 25, color: "#6366f1" },
+                  { label: "Time Horizon", value: readiness.breakdown.timeHorizon, max: 15, color: "#8b5cf6" },
+                  { label: "Contribution Effort", value: readiness.breakdown.contributionEffort, max: 15, color: "#f59e0b" },
+                  { label: "Safety & Diversification", value: readiness.breakdown.safetyNet, max: 15, color: "#10b981" },
+                ].map((item, i) => (
+                  <div key={i} style={{ padding: "12px 14px", background: "#f8fafc", borderRadius: 12 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                      <span style={{ fontSize: 12, color: "#64748b", fontWeight: 500 }}>{item.label}</span>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: item.color }}>{item.value}/{item.max}</span>
+                    </div>
+                    <div style={{ height: 6, borderRadius: 3, background: "#e2e8f0", overflow: "hidden" }}>
+                      <div className="growth-bar" style={{ height: "100%", borderRadius: 3, background: item.color, width: `${(item.value / item.max) * 100}%` }} />
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
 
             {/* Logic Flow */}
             <div className="print-card" style={{ background: "#fff", borderRadius: 20, border: "1.5px solid #e8eef6", padding: 28, boxShadow: "0 4px 24px rgba(15,23,42,0.06)" }}>
-              <SectionLabel>Calculation Logic Flow</SectionLabel>
-              <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 0, fontFamily: "'DM Sans', sans-serif" }}>
+              <SectionLabel icon="🔗">Calculation Logic Flow</SectionLabel>
+              <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 0 }}>
                 {[
                   { label: "Desired Monthly Income", val: fmt(c.desiredMo) + "/mo" },
                   { arrow: true },
@@ -916,11 +1030,11 @@ export default function RetirementCalculator() {
                   { arrow: true },
                   { label: "Required Capital (÷ rate)", val: fmt(c.reqCapital) },
                 ].map((item, i) => item.arrow ? (
-                  <div key={i} style={{ padding: "0 8px", color: "#94a3b8", fontSize: 18 }}>→</div>
+                  <div key={i} style={{ padding: "0 10px", color: "#94a3b8", fontSize: 20 }}>→</div>
                 ) : (
-                  <div key={i} style={{ background: "#f0f6ff", borderRadius: 12, padding: "10px 14px", textAlign: "center", minWidth: 130 }}>
+                  <div key={i} style={{ background: "linear-gradient(135deg, #f0f6ff, #eff6ff)", borderRadius: 12, padding: "12px 16px", textAlign: "center", minWidth: 140, border: "1px solid #bfdbfe" }}>
                     <p style={{ margin: 0, fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "#64748b" }}>{item.label}</p>
-                    <p style={{ margin: "4px 0 0", fontSize: 14, fontWeight: 700, color: "#1e3a8a" }}>{item.val}</p>
+                    <p style={{ margin: "6px 0 0", fontSize: 15, fontWeight: 700, color: "#1e3a8a" }}>{item.val}</p>
                   </div>
                 ))}
               </div>
@@ -928,17 +1042,100 @@ export default function RetirementCalculator() {
           </div>
         )}
 
+        {/* ── PROJECTIONS TAB ── */}
+        {(activeTab === "projections") && (
+          <div className="animate-in" style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+
+            {/* Portfolio Growth Chart */}
+            <div className="print-card" style={{ background: "#fff", borderRadius: 20, border: "1.5px solid #e8eef6", padding: 28, boxShadow: "0 4px 24px rgba(15,23,42,0.06)" }}>
+              <SectionLabel icon="📈">Portfolio Growth Projection</SectionLabel>
+              <p style={{ margin: "0 0 20px", fontSize: 13, color: "#64748b" }}>
+                Projected portfolio value from age {c.curAge} to {c.retAge} assuming {pct(c.r)} annual return with {fmt(c.pmt)}/mo contributions.
+              </p>
+              <GrowthChart timeline={timeline} retAge={c.retAge} reqCapital={c.reqCapital} />
+            </div>
+
+            {/* Key Milestones */}
+            <div className="print-card" style={{ background: "#fff", borderRadius: 20, border: "1.5px solid #e8eef6", padding: 28, boxShadow: "0 4px 24px rgba(15,23,42,0.06)" }}>
+              <SectionLabel icon="🏆">Key Milestones</SectionLabel>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12 }}>
+                {[100000, 250000, 500000, 750000, 1000000].map((target) => {
+                  const hit = timeline.find(t => t.value >= target);
+                  const reached = !!hit;
+                  return (
+                    <div key={target} style={{
+                      padding: "16px 18px",
+                      borderRadius: 14,
+                      background: reached ? "#f0fdf4" : "#fef2f2",
+                      border: `1.5px solid ${reached ? "#bbf7d0" : "#fecaca"}`,
+                    }}>
+                      <div style={{ fontSize: 18, fontWeight: 700, color: reached ? "#059669" : "#dc2626" }}>
+                        {fmt(target)}
+                      </div>
+                      <div style={{ fontSize: 12, color: "#64748b", marginTop: 4 }}>
+                        {reached ? `Reached at age ${hit.age}` : "Not reached in timeline"}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Year-by-Year Table */}
+            <div className="print-card" style={{ background: "#fff", borderRadius: 20, border: "1.5px solid #e8eef6", padding: 28, boxShadow: "0 4px 24px rgba(15,23,42,0.06)" }}>
+              <SectionLabel icon="📋">Year-by-Year Growth Timeline</SectionLabel>
+              <div style={{ overflowX: "auto" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                  <thead>
+                    <tr style={{ background: "#f0f6ff" }}>
+                      <th style={{ padding: "12px 16px", textAlign: "left", fontWeight: 700, color: "#1e3a8a", letterSpacing: "0.04em" }}>Year</th>
+                      <th style={{ padding: "12px 16px", textAlign: "left", fontWeight: 700, color: "#1e3a8a", letterSpacing: "0.04em" }}>Age</th>
+                      <th style={{ padding: "12px 16px", textAlign: "right", fontWeight: 700, color: "#1e3a8a", letterSpacing: "0.04em" }}>Portfolio Value</th>
+                      <th style={{ padding: "12px 16px", textAlign: "right", fontWeight: 700, color: "#1e3a8a", letterSpacing: "0.04em" }}>Contributed</th>
+                      <th style={{ padding: "12px 16px", textAlign: "right", fontWeight: 700, color: "#1e3a8a", letterSpacing: "0.04em" }}>Growth</th>
+                      <th style={{ padding: "12px 16px", textAlign: "right", fontWeight: 700, color: "#1e3a8a", letterSpacing: "0.04em" }}>Total Return</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {timeline.map((row, i) => {
+                      const isLast = i === timeline.length - 1;
+                      return (
+                        <tr key={row.age} className="rate-row" style={{
+                          background: isLast ? "#dbeafe" : i % 2 === 0 ? "#f8fafc" : "#fff",
+                          borderLeft: isLast ? "4px solid #1e40af" : "4px solid transparent",
+                        }}>
+                          <td style={{ padding: "10px 16px", color: "#64748b" }}>{row.year}</td>
+                          <td style={{ padding: "10px 16px", fontWeight: isLast ? 700 : 500, color: isLast ? "#1e3a8a" : "#0f172a" }}>
+                            {row.age}
+                            {isLast && <span style={{ fontSize: 10, background: "#1e40af", color: "#fff", borderRadius: 6, padding: "2px 6px", marginLeft: 6 }}>Retirement</span>}
+                          </td>
+                          <td style={{ padding: "10px 16px", textAlign: "right", fontWeight: isLast ? 700 : 500, color: isLast ? "#1e3a8a" : "#0f172a", fontFamily: "'JetBrains Mono', monospace", fontSize: 12 }}>{fmt(row.value)}</td>
+                          <td style={{ padding: "10px 16px", textAlign: "right", color: "#64748b", fontFamily: "'JetBrains Mono', monospace", fontSize: 12 }}>{fmt(row.contributed)}</td>
+                          <td style={{ padding: "10px 16px", textAlign: "right", color: row.growth >= 0 ? "#059669" : "#dc2626", fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: 500 }}>
+                            {row.growth >= 0 ? "+" : ""}{fmt(row.growth)}
+                          </td>
+                          <td style={{ padding: "10px 16px", textAlign: "right", color: "#94a3b8", fontSize: 12 }}>{(row.totalReturnPct * 100).toFixed(1)}%</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* ── SUMMARY TAB ── */}
         {(activeTab === "summary") && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+          <div className="animate-in" style={{ display: "flex", flexDirection: "column", gap: 24 }}>
             <div className="print-card" style={{ background: "#fff", borderRadius: 20, border: "1.5px solid #e8eef6", padding: 32, boxShadow: "0 4px 24px rgba(15,23,42,0.06)" }}>
               {/* Header */}
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", paddingBottom: 20, borderBottom: "2px solid #f1f5f9", marginBottom: 24, flexWrap: "wrap", gap: 16 }}>
                 <div>
-                  <p style={{ margin: 0, fontSize: 11, fontWeight: 700, letterSpacing: "0.16em", textTransform: "uppercase", color: "#94a3b8", fontFamily: "'DM Sans', sans-serif" }}>Prepared For</p>
-                  <h2 style={{ margin: "6px 0 0", fontSize: 26, fontFamily: "'Playfair Display', Georgia, serif", fontWeight: 700, color: "#0f172a" }}>{clientName || "Client Name"}</h2>
+                  <p style={{ margin: 0, fontSize: 11, fontWeight: 700, letterSpacing: "0.16em", textTransform: "uppercase", color: "#94a3b8" }}>Prepared For</p>
+                  <h2 style={{ margin: "6px 0 0", fontSize: 28, fontFamily: "'Playfair Display', Georgia, serif", fontWeight: 700, color: "#0f172a" }}>{clientName || "Client Name"}</h2>
                 </div>
-                <div style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 13, color: "#64748b", textAlign: "right", lineHeight: 1.8 }}>
+                <div style={{ fontSize: 13, color: "#64748b", textAlign: "right", lineHeight: 1.8 }}>
                   <div><strong style={{ color: "#0f172a" }}>{advisorName}</strong></div>
                   <div>{ADVISOR.company}</div>
                   <div>{ADVISOR.phone} · {ADVISOR.email}</div>
@@ -947,7 +1144,7 @@ export default function RetirementCalculator() {
               </div>
 
               {/* Summary rows */}
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 8 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 6 }}>
                 <SummaryRow label="Current Age" value={`${c.curAge}`} />
                 <SummaryRow label="Income Start Age" value={`${c.retAge}`} />
                 <SummaryRow label="Income Type" value={incomeType === "singleLife" ? "Single Life" : "Joint Life"} />
@@ -965,14 +1162,16 @@ export default function RetirementCalculator() {
                 <SummaryRow label="Est. Monthly Investment Income" value={fmt(c.estMoInv)} />
                 <SummaryRow label="Estimated Total Monthly Income" value={fmt(c.totalMo)} highlight />
                 <SummaryRow label="Required Monthly Contribution" value={fmt(c.neededPMT)} />
+                <SummaryRow label="Retirement Readiness Score" value={`${readiness.total}/100 (${readiness.grade})`} highlight />
               </div>
 
               {/* Advisor Talking Point */}
-              <div style={{ marginTop: 24, background: "linear-gradient(135deg, #0f1e4a, #1e40af)", borderRadius: 16, padding: 24 }}>
-                <p style={{ margin: "0 0 10px", fontSize: 11, fontWeight: 700, letterSpacing: "0.16em", textTransform: "uppercase", color: "rgba(255,255,255,0.55)", fontFamily: "'DM Sans', sans-serif" }}>
+              <div style={{ marginTop: 24, background: "linear-gradient(135deg, #0a1628, #1e3a8a)", borderRadius: 16, padding: 28, position: "relative", overflow: "hidden" }}>
+                <div style={{ position: "absolute", top: -20, right: -20, width: 100, height: 100, borderRadius: "50%", background: "rgba(59,130,246,0.1)" }} />
+                <p style={{ margin: "0 0 12px", fontSize: 11, fontWeight: 700, letterSpacing: "0.16em", textTransform: "uppercase", color: "rgba(147,197,253,0.6)" }}>
                   Advisor Talking Point
                 </p>
-                <p style={{ margin: 0, fontSize: 15, lineHeight: 1.75, color: "rgba(255,255,255,0.9)", fontFamily: "'Georgia', serif" }}>
+                <p style={{ margin: 0, fontSize: 15, lineHeight: 1.8, color: "rgba(255,255,255,0.92)", fontFamily: "'Georgia', serif", position: "relative", zIndex: 1 }}>
                   {c.meetsGoal
                     ? `Based on the selected assumptions, the current strategy is on pace to support the desired retirement income objective. Estimated total monthly retirement income is ${fmt(c.totalMo)}, which includes ${fmt(c.estMoInv)} from investments and ${fmt(c.ss)} from Social Security. The current strategy projects a capital surplus of ${fmt(Math.abs(c.capDiff))}.`
                     : `Based on the selected assumptions, the current strategy is not yet on pace to support the desired retirement income objective. The projection estimates ${fmt(c.totalMo)}/month total — ${fmt(c.estMoInv)} from investments plus ${fmt(c.ss)} from Social Security — falling short by ${fmt(Math.abs(c.moDiff))}/month. The required capital shortfall is ${fmt(Math.abs(c.capDiff))}. To close this gap, the modeled monthly contribution would need to be approximately ${fmt(c.neededPMT)}.`}
@@ -981,7 +1180,7 @@ export default function RetirementCalculator() {
 
               {/* Disclaimer */}
               <div style={{ marginTop: 20, padding: "16px 20px", background: "#f8fafc", borderRadius: 12, border: "1px solid #e8eef6" }}>
-                <p style={{ margin: 0, fontSize: 11, lineHeight: 1.7, color: "#94a3b8", fontFamily: "'DM Sans', sans-serif" }}>
+                <p style={{ margin: 0, fontSize: 11, lineHeight: 1.7, color: "#94a3b8" }}>
                   <strong style={{ color: "#64748b" }}>Disclaimer:</strong> This illustration is for internal planning purposes only. Historical return assumptions are used for ANWPX and AGTHX. Pacific Life Lifetime Income Creator payout rates are applied at the selected income start age. Social Security income is a user-supplied estimate and is not verified. Results do not represent guaranteed future investment performance or income. Past performance does not guarantee future results. Any income guarantees are subject to Pacific Life contract terms, rider terms, and the claims-paying ability of the issuing insurer.
                 </p>
               </div>
@@ -991,75 +1190,72 @@ export default function RetirementCalculator() {
 
         {/* ── RATE TABLE TAB ── */}
         {(activeTab === "rates") && (
-          <div className="print-card" style={{ background: "#fff", borderRadius: 20, border: "1.5px solid #e8eef6", padding: 28, boxShadow: "0 4px 24px rgba(15,23,42,0.06)" }}>
-            <SectionLabel>Pacific Life Lifetime Income Creator — Payout Rate Table</SectionLabel>
-            <p style={{ margin: "0 0 20px", fontSize: 13, color: "#64748b", fontFamily: "'DM Sans', sans-serif" }}>
-              Highlighted row shows your selected income start age ({c.retAge}). Rates shown are annual withdrawal percentages applied to account value.
-            </p>
-            <div style={{ overflowX: "auto" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: "'DM Sans', sans-serif", fontSize: 13 }}>
-                <thead>
-                  <tr style={{ background: "#f0f6ff" }}>
-                    <th style={{ padding: "12px 16px", textAlign: "left", fontWeight: 700, color: "#1e3a8a", letterSpacing: "0.04em" }}>Age</th>
-                    <th style={{ padding: "12px 16px", textAlign: "left", fontWeight: 700, color: "#1e3a8a", letterSpacing: "0.04em" }}>Single Life</th>
-                    <th style={{ padding: "12px 16px", textAlign: "left", fontWeight: 700, color: "#1e3a8a", letterSpacing: "0.04em" }}>Joint Life</th>
-                    <th style={{ padding: "12px 16px", textAlign: "left", fontWeight: 700, color: "#1e3a8a", letterSpacing: "0.04em" }}>Difference</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rateRows.map((row, i) => {
-                    const isActive = row.age === c.retAge;
-                    return (
-                      <tr key={row.age} style={{
-                        background: isActive ? "#dbeafe" : i % 2 === 0 ? "#f8fafc" : "#fff",
-                        borderLeft: isActive ? "4px solid #1e40af" : "4px solid transparent",
-                        transition: "background 0.1s",
-                      }}>
-                        <td style={{ padding: "10px 16px", fontWeight: isActive ? 700 : 500, color: isActive ? "#1e3a8a" : "#0f172a" }}>
-                          {row.age} {isActive && <span style={{ fontSize: 10, background: "#1e40af", color: "#fff", borderRadius: 6, padding: "2px 6px", marginLeft: 6 }}>Selected</span>}
-                        </td>
-                        <td style={{ padding: "10px 16px", color: isActive ? "#1e3a8a" : "#374151", fontWeight: isActive ? 600 : 400 }}>{pct(row.single)}</td>
-                        <td style={{ padding: "10px 16px", color: isActive ? "#1e3a8a" : "#374151", fontWeight: isActive ? 600 : 400 }}>{pct(row.joint)}</td>
-                        <td style={{ padding: "10px 16px", color: "#94a3b8", fontSize: 12 }}>{pct(row.single - row.joint)}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+          <div className="animate-in">
+            <div className="print-card" style={{ background: "#fff", borderRadius: 20, border: "1.5px solid #e8eef6", padding: 28, boxShadow: "0 4px 24px rgba(15,23,42,0.06)" }}>
+              <SectionLabel icon="🔒">Pacific Life Lifetime Income Creator — Payout Rate Table</SectionLabel>
+              <p style={{ margin: "0 0 20px", fontSize: 13, color: "#64748b" }}>
+                Highlighted row shows your selected income start age ({c.retAge}). Rates shown are annual withdrawal percentages applied to account value.
+              </p>
+              <div style={{ overflowX: "auto" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                  <thead>
+                    <tr style={{ background: "#f0f6ff" }}>
+                      <th style={{ padding: "12px 16px", textAlign: "left", fontWeight: 700, color: "#1e3a8a", letterSpacing: "0.04em" }}>Age</th>
+                      <th style={{ padding: "12px 16px", textAlign: "left", fontWeight: 700, color: "#1e3a8a", letterSpacing: "0.04em" }}>Single Life</th>
+                      <th style={{ padding: "12px 16px", textAlign: "left", fontWeight: 700, color: "#1e3a8a", letterSpacing: "0.04em" }}>Joint Life</th>
+                      <th style={{ padding: "12px 16px", textAlign: "left", fontWeight: 700, color: "#1e3a8a", letterSpacing: "0.04em" }}>Difference</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rateRows.map((row, i) => {
+                      const isActive = row.age === c.retAge;
+                      return (
+                        <tr key={row.age} className="rate-row" style={{
+                          background: isActive ? "#dbeafe" : i % 2 === 0 ? "#f8fafc" : "#fff",
+                          borderLeft: isActive ? "4px solid #1e40af" : "4px solid transparent",
+                        }}>
+                          <td style={{ padding: "10px 16px", fontWeight: isActive ? 700 : 500, color: isActive ? "#1e3a8a" : "#0f172a" }}>
+                            {row.age} {isActive && <span style={{ fontSize: 10, background: "#1e40af", color: "#fff", borderRadius: 6, padding: "2px 6px", marginLeft: 6 }}>Selected</span>}
+                          </td>
+                          <td style={{ padding: "10px 16px", color: isActive ? "#1e3a8a" : "#374151", fontWeight: isActive ? 600 : 400 }}>{pct(row.single)}</td>
+                          <td style={{ padding: "10px 16px", color: isActive ? "#1e3a8a" : "#374151", fontWeight: isActive ? 600 : 400 }}>{pct(row.joint)}</td>
+                          <td style={{ padding: "10px 16px", color: "#94a3b8", fontSize: 12 }}>{pct(row.single - row.joint)}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         )}
 
       </div>
 
-      {/* Professional Footer */}
-      <footer className="no-print" style={{
-        background: "linear-gradient(135deg, #0f1e4a 0%, #1e3a8a 100%)",
-        padding: "32px 24px",
-        marginTop: 0,
+      {/* ══════════════════════════════════════════════════════════════════════
+           FOOTER
+          ══════════════════════════════════════════════════════════════════════ */}
+      <div className="no-print" style={{
+        background: "linear-gradient(135deg, #0a1628, #0f1e4a)",
+        padding: "24px 32px",
+        marginTop: "auto",
       }}>
-        <div style={{ maxWidth: 1200, margin: "0 auto", display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 24 }}>
+        <div style={{ maxWidth: 1280, margin: "0 auto", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 16 }}>
           <div>
-            <h3 style={{ margin: 0, fontSize: 16, fontFamily: "'Playfair Display', Georgia, serif", fontWeight: 700, color: "#fff" }}>
-              Retirement Income Projection Calculator
-            </h3>
-            <p style={{ margin: "8px 0 0", fontSize: 12, color: "rgba(255,255,255,0.5)", fontFamily: "'DM Sans', sans-serif", maxWidth: 400, lineHeight: 1.7 }}>
-              ANWPX · AGTHX · Pacific Life Lifetime Income Creator · Social Security integration
+            <p style={{ margin: 0, fontSize: 12, color: "rgba(148,163,184,0.6)", lineHeight: 1.7 }}>
+              <strong style={{ color: "rgba(148,163,184,0.8)" }}>{ADVISOR.company}</strong> · {ADVISOR.address}
+            </p>
+            <p style={{ margin: "4px 0 0", fontSize: 11, color: "rgba(148,163,184,0.4)" }}>
+              For internal planning purposes only. Not a guarantee of future investment performance.
             </p>
           </div>
-          <div style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 12, color: "rgba(255,255,255,0.7)", lineHeight: 1.9, textAlign: "right" }}>
-            <div style={{ fontWeight: 600, color: "#fff", fontSize: 13 }}>{ADVISOR.name}</div>
-            <div>{ADVISOR.company}</div>
-            <div>{ADVISOR.phone} · {ADVISOR.email}</div>
-            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.45)" }}>{ADVISOR.address}</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 16, fontSize: 12, color: "rgba(148,163,184,0.5)" }}>
+            <span>{ADVISOR.phone}</span>
+            <span>·</span>
+            <span>{ADVISOR.email}</span>
           </div>
         </div>
-        <div style={{ maxWidth: 1200, margin: "20px auto 0", paddingTop: 16, borderTop: "1px solid rgba(255,255,255,0.1)" }}>
-          <p style={{ margin: 0, fontSize: 10, color: "rgba(255,255,255,0.35)", fontFamily: "'DM Sans', sans-serif", lineHeight: 1.7 }}>
-            This illustration is for internal planning purposes only. Historical return assumptions are used for ANWPX and AGTHX. Pacific Life Lifetime Income Creator payout rates are applied at the selected income start age. Past performance does not guarantee future results. Any income guarantees are subject to Pacific Life contract terms and the claims-paying ability of the issuing insurer.
-          </p>
-        </div>
-      </footer>
+      </div>
 
       {/* AI Copilot Panel */}
       <CopilotPanel
