@@ -190,6 +190,210 @@ const SummaryRow = memo(({ label, value, highlight }) => {
   );
 });
 
+// ─── Visualization Components ─────────────────────────────────────────────────
+
+const ReadinessGauge = memo(function ReadinessGauge({ score, grade, meetsGoal }) {
+  const radius = 54;
+  const stroke = 10;
+  const circumference = 2 * Math.PI * radius;
+  const progress = (score / 100) * circumference;
+  const color = score >= 80 ? "#059669" : score >= 60 ? "#f59e0b" : "#dc2626";
+  return (
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
+      <svg width="140" height="140" viewBox="0 0 140 140" style={{ transform: "rotate(-90deg)" }}>
+        <circle cx="70" cy="70" r={radius} fill="none" stroke="#e5e7eb" strokeWidth={stroke} />
+        <circle cx="70" cy="70" r={radius} fill="none" stroke={color} strokeWidth={stroke}
+          strokeDasharray={circumference} strokeDashoffset={circumference - progress}
+          strokeLinecap="round" style={{ transition: "stroke-dashoffset 0.8s ease" }} />
+      </svg>
+      <div style={{ position: "relative", marginTop: -108, marginBottom: 48, textAlign: "center" }}>
+        <span style={{ fontSize: 32, fontWeight: 700, color: "#0f172a", fontFamily: "'Playfair Display', Georgia, serif" }}>{score}</span>
+        <span style={{ fontSize: 14, color: "#64748b", fontFamily: "'DM Sans', sans-serif" }}>/100</span>
+        <div style={{ fontSize: 13, fontWeight: 600, color, fontFamily: "'DM Sans', sans-serif", marginTop: 2 }}>Grade {grade}</div>
+      </div>
+      <div style={{ fontSize: 12, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", color: "#64748b", fontFamily: "'DM Sans', sans-serif" }}>
+        Retirement Readiness
+      </div>
+    </div>
+  );
+});
+
+const GrowthChart = memo(function GrowthChart({ data, reqCapital, retAge }) {
+  if (!data || data.length < 2) return null;
+  const W = 560, H = 220, padL = 56, padR = 20, padT = 20, padB = 36;
+  const cW = W - padL - padR, cH = H - padT - padB;
+  const maxVal = Math.max(...data.map(d => d.value), reqCapital) * 1.08;
+  const minVal = 0;
+
+  const toX = (i) => padL + (i / (data.length - 1)) * cW;
+  const toY = (v) => padT + cH - ((v - minVal) / (maxVal - minVal)) * cH;
+
+  const growthLine = data.map((d, i) => `${i === 0 ? "M" : "L"}${toX(i).toFixed(1)},${toY(d.value).toFixed(1)}`).join(" ");
+  const contribLine = data.map((d, i) => `${i === 0 ? "M" : "L"}${toX(i).toFixed(1)},${toY(d.contributed).toFixed(1)}`).join(" ");
+  const areaPath = growthLine + ` L${toX(data.length - 1).toFixed(1)},${(padT + cH).toFixed(1)} L${padL},${(padT + cH).toFixed(1)} Z`;
+
+  const reqCapY = toY(reqCapital);
+  const yTicks = 4;
+  const xTickInterval = Math.max(1, Math.ceil(data.length / 6));
+
+  return (
+    <div style={{ width: "100%", overflowX: "auto" }}>
+      <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", maxWidth: W, height: "auto", display: "block" }}>
+        <defs>
+          <linearGradient id="growthFill" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#1e40af" stopOpacity="0.15" />
+            <stop offset="100%" stopColor="#1e40af" stopOpacity="0.02" />
+          </linearGradient>
+        </defs>
+        {/* Grid lines */}
+        {Array.from({ length: yTicks + 1 }, (_, i) => {
+          const val = minVal + (maxVal - minVal) * (i / yTicks);
+          const y = toY(val);
+          return (
+            <g key={i}>
+              <line x1={padL} y1={y} x2={W - padR} y2={y} stroke="#f1f5f9" strokeWidth="1" />
+              <text x={padL - 8} y={y + 4} textAnchor="end" fill="#94a3b8" fontSize="9" fontFamily="DM Sans, sans-serif">
+                {val >= 1000000 ? `$${(val / 1000000).toFixed(1)}M` : val >= 1000 ? `$${(val / 1000).toFixed(0)}K` : `$${val.toFixed(0)}`}
+              </text>
+            </g>
+          );
+        })}
+        {/* X labels */}
+        {data.filter((_, i) => i % xTickInterval === 0 || i === data.length - 1).map((d, idx) => {
+          const i = data.indexOf(d);
+          return (
+            <text key={idx} x={toX(i)} y={H - 6} textAnchor="middle" fill="#94a3b8" fontSize="9" fontFamily="DM Sans, sans-serif">
+              Age {d.age}
+            </text>
+          );
+        })}
+        {/* Required capital line */}
+        {reqCapital > 0 && reqCapY >= padT && reqCapY <= padT + cH && (
+          <g>
+            <line x1={padL} y1={reqCapY} x2={W - padR} y2={reqCapY} stroke="#dc2626" strokeWidth="1" strokeDasharray="6,4" />
+            <text x={W - padR} y={reqCapY - 6} textAnchor="end" fill="#dc2626" fontSize="8" fontFamily="DM Sans, sans-serif" fontWeight="600">
+              Required Capital
+            </text>
+          </g>
+        )}
+        {/* Contribution line */}
+        <path d={contribLine} fill="none" stroke="#94a3b8" strokeWidth="1.5" strokeDasharray="4,3" />
+        {/* Growth area & line */}
+        <path d={areaPath} fill="url(#growthFill)" />
+        <path d={growthLine} fill="none" stroke="#1e40af" strokeWidth="2.5" strokeLinejoin="round" />
+        {/* End dot */}
+        <circle cx={toX(data.length - 1)} cy={toY(data[data.length - 1].value)} r="4" fill="#1e40af" stroke="#fff" strokeWidth="2" />
+      </svg>
+      <div style={{ display: "flex", gap: 20, justifyContent: "center", marginTop: 10, fontFamily: "'DM Sans', sans-serif", fontSize: 11 }}>
+        <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <span style={{ width: 16, height: 3, background: "#1e40af", borderRadius: 2, display: "inline-block" }} /> Portfolio Growth
+        </span>
+        <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <span style={{ width: 16, height: 2, borderTop: "2px dashed #94a3b8", display: "inline-block" }} /> Contributions
+        </span>
+        {reqCapital > 0 && (
+          <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <span style={{ width: 16, height: 2, borderTop: "2px dashed #dc2626", display: "inline-block" }} /> Required Capital
+          </span>
+        )}
+      </div>
+    </div>
+  );
+});
+
+const IncomeBreakdownBar = memo(function IncomeBreakdownBar({ investmentIncome, socialSecurity, desiredIncome }) {
+  const total = investmentIncome + socialSecurity;
+  const invPct = total > 0 ? (investmentIncome / total) * 100 : 0;
+  const ssPct = total > 0 ? (socialSecurity / total) * 100 : 0;
+  const goalPct = desiredIncome > 0 ? Math.min(100, (total / desiredIncome) * 100) : 100;
+
+  return (
+    <div style={{ fontFamily: "'DM Sans', sans-serif" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 12 }}>
+        <span style={{ fontSize: 12, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", color: "#64748b" }}>Income Breakdown</span>
+        <span style={{ fontSize: 13, fontWeight: 700, color: goalPct >= 100 ? "#059669" : "#dc2626" }}>
+          {goalPct.toFixed(0)}% of Goal
+        </span>
+      </div>
+      {/* Goal progress */}
+      <div style={{ height: 8, borderRadius: 4, background: "#e5e7eb", overflow: "hidden", marginBottom: 16 }}>
+        <div style={{
+          height: "100%",
+          width: `${Math.min(100, goalPct)}%`,
+          borderRadius: 4,
+          background: goalPct >= 100 ? "linear-gradient(90deg, #059669, #10b981)" : "linear-gradient(90deg, #f59e0b, #fbbf24)",
+          transition: "width 0.6s ease",
+        }} />
+      </div>
+      {/* Breakdown */}
+      <div style={{ display: "flex", gap: 16 }}>
+        <div style={{ flex: 1 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+            <div style={{ width: 10, height: 10, borderRadius: 3, background: "#1e40af" }} />
+            <span style={{ fontSize: 12, color: "#64748b" }}>Investment Income</span>
+          </div>
+          <span style={{ fontSize: 18, fontWeight: 700, color: "#0f172a" }}>{fmt(investmentIncome)}<span style={{ fontSize: 12, fontWeight: 400, color: "#94a3b8" }}>/mo</span></span>
+          <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 2 }}>{invPct.toFixed(0)}% of total income</div>
+        </div>
+        <div style={{ flex: 1 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+            <div style={{ width: 10, height: 10, borderRadius: 3, background: "#059669" }} />
+            <span style={{ fontSize: 12, color: "#64748b" }}>Social Security</span>
+          </div>
+          <span style={{ fontSize: 18, fontWeight: 700, color: "#0f172a" }}>{fmt(socialSecurity)}<span style={{ fontSize: 12, fontWeight: 400, color: "#94a3b8" }}>/mo</span></span>
+          <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 2 }}>{ssPct.toFixed(0)}% of total income</div>
+        </div>
+      </div>
+    </div>
+  );
+});
+
+const GrowthTimeline = memo(function GrowthTimeline({ data }) {
+  if (!data || data.length === 0) return null;
+  const maxVal = Math.max(...data.map(d => d.value));
+  const interval = data.length <= 10 ? 1 : data.length <= 20 ? 2 : 5;
+  const rows = data.filter((d, i) => i % interval === 0 || i === data.length - 1);
+
+  return (
+    <div style={{ overflowX: "auto" }}>
+      <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: "'DM Sans', sans-serif", fontSize: 13 }}>
+        <thead>
+          <tr style={{ background: "#f0f6ff" }}>
+            <th style={{ padding: "10px 14px", textAlign: "left", fontWeight: 700, color: "#1e3a8a", letterSpacing: "0.04em", fontSize: 11 }}>Age</th>
+            <th style={{ padding: "10px 14px", textAlign: "left", fontWeight: 700, color: "#1e3a8a", letterSpacing: "0.04em", fontSize: 11 }}>Year</th>
+            <th style={{ padding: "10px 14px", textAlign: "right", fontWeight: 700, color: "#1e3a8a", letterSpacing: "0.04em", fontSize: 11 }}>Contributed</th>
+            <th style={{ padding: "10px 14px", textAlign: "right", fontWeight: 700, color: "#1e3a8a", letterSpacing: "0.04em", fontSize: 11 }}>Portfolio Value</th>
+            <th style={{ padding: "10px 14px", textAlign: "right", fontWeight: 700, color: "#1e3a8a", letterSpacing: "0.04em", fontSize: 11 }}>Growth</th>
+            <th style={{ padding: "10px 14px", fontWeight: 700, color: "#1e3a8a", letterSpacing: "0.04em", fontSize: 11, minWidth: 120 }}>Progress</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((d, i) => {
+            const growth = d.value - d.contributed;
+            const pctFill = maxVal > 0 ? (d.value / maxVal) * 100 : 0;
+            return (
+              <tr key={d.age} style={{ background: i % 2 === 0 ? "#f8fafc" : "#fff" }}>
+                <td style={{ padding: "8px 14px", fontWeight: 600, color: "#0f172a" }}>{d.age}</td>
+                <td style={{ padding: "8px 14px", color: "#64748b" }}>{d.year}</td>
+                <td style={{ padding: "8px 14px", textAlign: "right", color: "#64748b" }}>{fmt(d.contributed)}</td>
+                <td style={{ padding: "8px 14px", textAlign: "right", fontWeight: 600, color: "#1e3a8a" }}>{fmt(d.value)}</td>
+                <td style={{ padding: "8px 14px", textAlign: "right", color: growth >= 0 ? "#059669" : "#dc2626", fontWeight: 500 }}>
+                  {growth >= 0 ? "+" : ""}{fmt(growth)}
+                </td>
+                <td style={{ padding: "8px 14px" }}>
+                  <div style={{ height: 6, borderRadius: 3, background: "#e5e7eb", overflow: "hidden" }}>
+                    <div style={{ height: "100%", width: `${pctFill}%`, borderRadius: 3, background: "linear-gradient(90deg, #3b82f6, #1e40af)", transition: "width 0.4s ease" }} />
+                  </div>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+});
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function RetirementCalculator() {
@@ -234,12 +438,34 @@ export default function RetirementCalculator() {
 
     const neededPMT = requiredPMT(reqCapital, pv, r, months);
 
+    // Growth timeline data for chart visualization
+    const growthData = [];
+    for (let yr = 0; yr <= years; yr++) {
+      const val = fv(pv, pmt, r, yr * 12);
+      growthData.push({
+        age: curAge + yr,
+        year: yr,
+        value: val,
+        contributed: pv + pmt * yr * 12,
+      });
+    }
+
+    // Readiness score (0–100)
+    const readinessScore = desiredMo > 0 ? Math.min(100, Math.round((totalMo / desiredMo) * 100)) : 100;
+    const readinessGrade =
+      readinessScore >= 95 ? "A+" :
+      readinessScore >= 85 ? "A" :
+      readinessScore >= 75 ? "B+" :
+      readinessScore >= 65 ? "B" :
+      readinessScore >= 50 ? "C" : "D";
+
     return {
       curAge, retAge, pv, pmt, desiredMo, ss,
       years, months, wdRate, projValue,
       netMoGoal, netAnnGoal, reqCapital,
       estMoInv, totalMo, moDiff, capDiff, meetsGoal, neededPMT,
       fund, r,
+      growthData, readinessScore, readinessGrade,
     };
   }, [currentAge, incomeStartAge, initialInvestment, monthlyContribution, desiredMonthlyIncome, socialSecurityIncome, fundKey, incomeType]);
 
@@ -430,6 +656,9 @@ export default function RetirementCalculator() {
         input:focus, select:focus { outline: none; }
         .tab-btn { cursor: pointer; transition: all 0.2s; }
         .tab-btn:hover { background: rgba(30,64,175,0.06) !important; }
+        @media (max-width: 768px) {
+          .readiness-growth-grid { grid-template-columns: 1fr !important; }
+        }
       `}</style>
 
       {/* Header */}
@@ -647,6 +876,36 @@ export default function RetirementCalculator() {
               <MetricTile label="Pacific Life Withdrawal Rate" value={pct(c.wdRate)} icon="🔒" sub={`Age ${c.retAge} · ${incomeType === "singleLife" ? "Single" : "Joint"} Life`} />
             </div>
 
+            {/* Readiness & Growth Row */}
+            <div className="readiness-growth-grid" style={{ display: "grid", gridTemplateColumns: "280px 1fr", gap: 24, alignItems: "stretch" }}>
+              {/* Readiness Gauge */}
+              <div className="print-card" style={{ background: "#fff", borderRadius: 20, border: "1.5px solid #e8eef6", padding: 28, boxShadow: "0 4px 24px rgba(15,23,42,0.06)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
+                <ReadinessGauge score={c.readinessScore} grade={c.readinessGrade} meetsGoal={c.meetsGoal} />
+                <div style={{ marginTop: 12, padding: "8px 14px", borderRadius: 10, background: c.meetsGoal ? "#ecfdf5" : "#fef2f2", textAlign: "center" }}>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: c.meetsGoal ? "#059669" : "#dc2626", fontFamily: "'DM Sans', sans-serif" }}>
+                    {c.meetsGoal ? "On Track" : "Action Needed"}
+                  </span>
+                </div>
+              </div>
+
+              {/* Growth Chart */}
+              <div className="print-card" style={{ background: "#fff", borderRadius: 20, border: "1.5px solid #e8eef6", padding: 28, boxShadow: "0 4px 24px rgba(15,23,42,0.06)" }}>
+                <SectionLabel>Portfolio Growth Projection</SectionLabel>
+                <GrowthChart data={c.growthData} reqCapital={c.reqCapital} retAge={c.retAge} />
+              </div>
+            </div>
+
+            {/* Income Breakdown */}
+            <div className="print-card" style={{ background: "#fff", borderRadius: 20, border: "1.5px solid #e8eef6", padding: 28, boxShadow: "0 4px 24px rgba(15,23,42,0.06)" }}>
+              <IncomeBreakdownBar investmentIncome={c.estMoInv} socialSecurity={c.ss} desiredIncome={c.desiredMo} />
+            </div>
+
+            {/* Growth Timeline */}
+            <div className="print-card" style={{ background: "#fff", borderRadius: 20, border: "1.5px solid #e8eef6", padding: 28, boxShadow: "0 4px 24px rgba(15,23,42,0.06)" }}>
+              <SectionLabel>Year-by-Year Growth Timeline</SectionLabel>
+              <GrowthTimeline data={c.growthData} />
+            </div>
+
             {/* Logic Flow */}
             <div className="print-card" style={{ background: "#fff", borderRadius: 20, border: "1.5px solid #e8eef6", padding: 28, boxShadow: "0 4px 24px rgba(15,23,42,0.06)" }}>
               <SectionLabel>Calculation Logic Flow</SectionLabel>
@@ -775,6 +1034,35 @@ export default function RetirementCalculator() {
         )}
 
       </div>
+
+      {/* Professional Footer */}
+      <footer className="no-print" style={{
+        background: "linear-gradient(135deg, #0f1e4a 0%, #1e3a8a 100%)",
+        padding: "32px 24px",
+        marginTop: 0,
+      }}>
+        <div style={{ maxWidth: 1200, margin: "0 auto", display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 24 }}>
+          <div>
+            <h3 style={{ margin: 0, fontSize: 16, fontFamily: "'Playfair Display', Georgia, serif", fontWeight: 700, color: "#fff" }}>
+              Retirement Income Projection Calculator
+            </h3>
+            <p style={{ margin: "8px 0 0", fontSize: 12, color: "rgba(255,255,255,0.5)", fontFamily: "'DM Sans', sans-serif", maxWidth: 400, lineHeight: 1.7 }}>
+              ANWPX · AGTHX · Pacific Life Lifetime Income Creator · Social Security integration
+            </p>
+          </div>
+          <div style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 12, color: "rgba(255,255,255,0.7)", lineHeight: 1.9, textAlign: "right" }}>
+            <div style={{ fontWeight: 600, color: "#fff", fontSize: 13 }}>{ADVISOR.name}</div>
+            <div>{ADVISOR.company}</div>
+            <div>{ADVISOR.phone} · {ADVISOR.email}</div>
+            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.45)" }}>{ADVISOR.address}</div>
+          </div>
+        </div>
+        <div style={{ maxWidth: 1200, margin: "20px auto 0", paddingTop: 16, borderTop: "1px solid rgba(255,255,255,0.1)" }}>
+          <p style={{ margin: 0, fontSize: 10, color: "rgba(255,255,255,0.35)", fontFamily: "'DM Sans', sans-serif", lineHeight: 1.7 }}>
+            This illustration is for internal planning purposes only. Historical return assumptions are used for ANWPX and AGTHX. Pacific Life Lifetime Income Creator payout rates are applied at the selected income start age. Past performance does not guarantee future results. Any income guarantees are subject to Pacific Life contract terms and the claims-paying ability of the issuing insurer.
+          </p>
+        </div>
+      </footer>
 
       {/* AI Copilot Panel */}
       <CopilotPanel
